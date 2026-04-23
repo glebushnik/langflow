@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from contextlib import aclosing
 from typing import TYPE_CHECKING, Any
 
@@ -42,6 +43,14 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Coroutine
 
     from langflow.agentic.api.schemas import StepType
+
+_CLARIFICATION_ROUND_RE = re.compile(r"^\[clarification_round:(\d+)\]", re.MULTILINE)
+
+
+def _extract_clarification_round(text: str) -> int:
+    """Return the clarification round number embedded in the request text, or 0 if absent."""
+    match = _CLARIFICATION_ROUND_RE.search(text)
+    return int(match.group(1)) if match else 0
 
 
 async def execute_flow_with_validation(
@@ -89,6 +98,7 @@ async def execute_flow_with_validation(
             original_request=current_input,
             translated_request=intent_result.translation,
             global_variables=global_variables,
+            clarification_round=_extract_clarification_round(current_input),
             user_id=user_id,
             provider=provider,
             model_name=model_name,
@@ -287,6 +297,7 @@ async def execute_flow_with_validation_streaming(
                 provider=provider,
                 model_name=model_name,
                 api_key_var=api_key_var,
+                clarification_round=_extract_clarification_round(current_input),
             )
 
             if await check_cancelled():

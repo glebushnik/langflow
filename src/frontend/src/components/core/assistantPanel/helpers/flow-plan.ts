@@ -406,6 +406,13 @@ export function buildFlowPlanCanvasData({
       }
     }
 
+    if (component.display_name) {
+      template.display_name = component.display_name;
+    }
+    if (component.purpose) {
+      template.description = component.purpose;
+    }
+
     const preferredOutput = plan.connections.find(
       (connection) => connection.source_id === component.id,
     )?.source_output;

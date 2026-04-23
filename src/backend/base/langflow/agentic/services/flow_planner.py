@@ -31,6 +31,7 @@ from langflow.agentic.utils.component_search import list_all_components
 
 _PLANNER_COMPLETION_BUDGET = 1800
 _MAX_COMPONENTS_IN_PROMPT = 36
+_MAX_CLARIFICATION_ROUNDS = 3
 _MAX_FIELDS_PER_COMPONENT = 14
 _MAX_OUTPUTS_PER_COMPONENT = 4
 _DEFAULT_VALUE_PREVIEW_LIMIT = 60
@@ -443,9 +444,29 @@ def _build_planner_prompt(
     original_request: str,
     translated_request: str,
     catalog: list[_CatalogComponent],
+    clarification_round: int = 0,
 ) -> str:
     schema_json = json.dumps(FlowPlanResult.model_json_schema(), ensure_ascii=False)
+
+    if clarification_round == 0:
+        round_instruction = (
+            "MANDATORY OVERRIDE: This is the FIRST planning request. "
+            "You MUST return `status=needs_clarification` with 1-3 focused clarifying questions. "
+            "Do NOT return `approval_required` even if the request seems clear enough. "
+            "Ask about data sources, expected output format, or specific integrations needed.\n\n"
+        )
+    elif clarification_round >= _MAX_CLARIFICATION_ROUNDS:
+        round_instruction = (
+            "MANDATORY OVERRIDE: The user has already answered clarifying questions "
+            f"{clarification_round} time(s). "
+            "You MUST return `status=approval_required` with a complete implementation plan. "
+            "Do NOT return `needs_clarification` — no more questions allowed.\n\n"
+        )
+    else:
+        round_instruction = ""
+
     return (
+        f"{round_instruction}"
         "You are the Langflow stock flow planner.\n"
         "Your job is to convert a business request into a minimal Langflow chain built only from stock components.\n\n"
         "Rules:\n"
@@ -459,12 +480,21 @@ def _build_planner_prompt(
         "7. Use exact `component_name`, exact `source_output`, and exact `target_field` values from the catalog.\n"
         "8. `field_values` may contain only real template fields from the catalog and should stay minimal.\n"
         "9. Always ask for approval before implementation through `approval_message`.\n"
-        "10. All human-facing text MUST be written in Russian.\n"
-        "11. Keep code identifiers, component names, field names, and URLs in their original form, "
-        "but explain everything else in Russian.\n"
-        "12. If a component has instruction-bearing fields such as `system_message`, `system_prompt`, "
-        "`template`, `prompt`, or `format_instructions`, fill them with concrete task instructions.\n"
-        "13. Never leave an active LLM or prompt component without explicit instructions for its job.\n"
+        "10. ALL human-facing text MUST be in Russian — title, summary, user_summary, "
+        "approval_message, data_flow_steps, assumptions, warnings, purpose, notes, "
+        "and every string value inside field_values (system_message, system_prompt, template, "
+        "prompt, format_instructions, etc.).\n"
+        "11. Keep ONLY these in their original English/technical form: component_name values, "
+        "field key names (e.g. system_message, collection_name), file extension parts (.txt, .json), "
+        "and URLs. Everything else is Russian.\n"
+        "12. For each component, set `display_name` to a SHORT (2-5 words) RUSSIAN name that "
+        "describes that component's specific ROLE in this flow (not the generic component type). "
+        "Example: instead of 'Language Model', write 'Анализ отзывов'; instead of 'Write File', "
+        "write 'Сохранение отчёта'.\n"
+        "13. Set `purpose` to a clear Russian sentence explaining what this component does in the flow.\n"
+        "14. If a component has instruction-bearing fields (system_message, system_prompt, template, "
+        "prompt, format_instructions), fill them with concrete Russian instructions for this task.\n"
+        "15. Never leave an active LLM or prompt component without explicit Russian instructions.\n"
         "14. When a storage/retrieval component needs an identifier such as `knowledge_base` or "
         "`collection_name`, provide one.\n"
         "15. Do not rely on hidden frontend defaults for critical behavior. Fill the fields that make the "
@@ -498,14 +528,16 @@ def _build_clarification_prompt(
         "You convert stock-flow clarification questions into an interactive Russian assistant wizard.\n"
         "The user is a non-technical business stakeholder.\n\n"
         "Rules:\n"
-        "1. Keep all human-facing text strictly in Russian.\n"
+        "1. Keep ALL text strictly in Russian — question, label, value, input_placeholder, "
+        "clarification_intro. No English words allowed.\n"
         "2. Preserve the intent of the clarification questions.\n"
         "3. Return at most 3 questions.\n"
-        "4. For each question, produce exactly 2 concise suggested options.\n"
-        "5. Each option must have a short `label` and a complete `value` written in Russian.\n"
-        "6. Add one `input_placeholder` for free-form manual input on every question.\n"
-        "7. Keep the options practical and non-technical. Do not overwhelm the user with long menus.\n"
-        "8. Do not use markdown or explanations outside JSON.\n\n"
+        "4. For each question, produce EXACTLY 2 concise suggested options (no more, no fewer).\n"
+        "5. Each option: `label` is a short 2-4 word button text in Russian; `value` is a complete "
+        "sentence in Russian that will be sent to the planner as the user's answer.\n"
+        "6. `input_placeholder` is a short Russian hint for free-form input on every question.\n"
+        "7. Keep options practical and non-technical.\n"
+        "8. Return only JSON — no markdown, no explanations, no code blocks.\n\n"
         f"Original user request:\n{original_request}\n\n"
         f"English translation of the request:\n{translated_request}\n\n"
         f"Flow title:\n{plan.title}\n\n"
@@ -942,7 +974,7 @@ def _canonicalize_plan(
         canonical_component = FlowPlanComponent(
             id=component.id,
             component_name=catalog_component.name,
-            display_name=catalog_component.display_name,
+            display_name=component.display_name or catalog_component.display_name,
             category=catalog_component.category,
             purpose=component.purpose,
             field_values=enriched_values,
@@ -1174,6 +1206,7 @@ async def plan_stock_flow(
     provider: str | None = None,
     model_name: str | None = None,
     api_key_var: str | None = None,
+    clarification_round: int = 0,
 ) -> FlowPlanResult:
     """Create an approval-ready stock-component flow plan for a business user."""
     catalog, lookup = await _get_stock_catalog()
@@ -1182,6 +1215,7 @@ async def plan_stock_flow(
         original_request=original_request,
         translated_request=translated_request,
         catalog=shortlisted_components,
+        clarification_round=clarification_round,
     )
     prompt_tokens = _estimate_tokens(system_prompt) + _estimate_tokens(original_request)
 
@@ -1252,6 +1286,19 @@ async def plan_stock_flow(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
     )
+
+    # Enforce clarification round limits regardless of what the LLM decided
+    if clarification_round == 0 and canonical_plan.status == "approval_required":
+        # First request must always ask questions — LLM ignored the instruction
+        default_questions = _build_default_clarifying_questions(original_request)
+        canonical_plan = canonical_plan.model_copy(
+            update={"status": "needs_clarification", "clarifying_questions": default_questions}
+        )
+
+    if clarification_round >= _MAX_CLARIFICATION_ROUNDS and canonical_plan.status == "needs_clarification":
+        # Max rounds reached — force approval, stop asking questions
+        return canonical_plan.model_copy(update={"status": "approval_required"})
+
     if canonical_plan.status != "needs_clarification":
         return canonical_plan
 

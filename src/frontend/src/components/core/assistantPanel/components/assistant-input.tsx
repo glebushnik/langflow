@@ -178,7 +178,7 @@ export function AssistantInput({
       />
       <div
         className={cn(
-          "relative flex cursor-text flex-col rounded-md border border-border bg-background pb-2.5 transition-colors focus-within:border-muted-foreground shadow-[0_0_15px_rgba(52,211,153,0.12),0_0_30px_rgba(16,185,129,0.08)]",
+          "relative flex cursor-text flex-col rounded-2xl border border-border bg-background pb-2.5 transition-colors focus-within:border-muted-foreground shadow-[0_0_15px_rgba(52,211,153,0.12),0_0_30px_rgba(16,185,129,0.08)]",
           compact ? "gap-1" : "gap-4",
         )}
         onClick={() => textareaRef.current?.focus()}

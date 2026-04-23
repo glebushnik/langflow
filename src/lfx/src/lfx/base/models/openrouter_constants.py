@@ -55,6 +55,7 @@ OPENROUTER_MODELS_DETAILED = [
         provider="OpenRouter", name="mistralai/mixtral-8x7b-instruct", icon="OpenRouter", tool_calling=True
     ),
     # Qwen via OpenRouter
+    create_model_metadata(provider="OpenRouter", name="qwen/qwen3.5-flash-02-23", icon="OpenRouter", tool_calling=True),
     create_model_metadata(provider="OpenRouter", name="qwen/qwen3.6-plus", icon="OpenRouter", tool_calling=True),
     create_model_metadata(provider="OpenRouter", name="qwen/qwen3-235b-a22b", icon="OpenRouter", tool_calling=True),
     create_model_metadata(provider="OpenRouter", name="qwen/qwen3-30b-a3b", icon="OpenRouter", tool_calling=True),

@@ -48,6 +48,8 @@ IMPORTANT rules:
 - Short follow-up requests that imply changes to something previously generated = generate_component
   (e.g., "use X instead", "add Y", "change Z", "make it do W", "can you also...", "what about using...")
 - Requests for complete systems/workflows with multiple parts = build_flow
+- Requests that say "build a complete flow incorporating these clarifications" or "rebuild the flow \
+with these user answers" = build_flow (even if they reference previous context)
 - Questions about OTHER tools or platforms (n8n, Make, Zapier, AutoGen, CrewAI, etc.) = off_topic
 - General knowledge questions NOT related to Langflow = off_topic
 - If unsure whether it's about Langflow, classify as "question" (not off_topic)
@@ -95,6 +97,12 @@ Output: {{"translation": "explain how kubernetes works", "intent": "off_topic"}}
 
 Input: "write me a poem about cats"
 Output: {{"translation": "write me a poem about cats", "intent": "off_topic"}}
+
+Input: "Build a complete multi-component Langflow flow using only stock components, \
+incorporating the user clarifications below. Original user request: build a chatbot. \
+Clarifications: - What data source? Answer: company documents"
+Output: {{"translation": "Build a complete Langflow flow using stock components for a chatbot \
+over company documents", "intent": "build_flow"}}
 """
 
 

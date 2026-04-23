@@ -1,5 +1,5 @@
 import { useStoreApi } from "@xyflow/react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ShortUniqueId from "short-unique-id";
 import { buildFlowPlanCanvasData } from "@/components/core/assistantPanel/helpers/flow-plan";
 import {
@@ -17,10 +17,16 @@ import type {
   AssistantMessage,
   AssistantModel,
 } from "../assistant-panel.types";
+import {
+  deserializeMessages,
+  serializeMessages,
+} from "../helpers/session-storage";
 
 const uid = new ShortUniqueId();
 const AGENTIC_SESSION_PREFIX = "agentic_";
 const NULLISH_FLOW_ID_VALUES = new Set(["", "none", "null", "undefined"]);
+const CURRENT_MESSAGES_KEY = "langflow-assistant-current-messages";
+const CURRENT_SESSION_ID_KEY = "langflow-assistant-current-session-id";
 const DEFAULT_CANVAS_NODE_WIDTH = 320;
 const MINIMIZED_CANVAS_NODE_WIDTH = 192;
 
@@ -62,12 +68,13 @@ function buildClarificationSummaryMessage(
     return "Отправляю уточнения по flow.";
   }
 
-  return ["Уточнения по flow:", ...clarificationLines].join("\n");
+  return ["Уточнения по flow учтены:", ...clarificationLines].join("\n");
 }
 
 function buildClarificationRequest(
   flowPlan: AgenticFlowPlanResult,
   answers: Record<string, string>,
+  round: number,
 ): string {
   const clarificationLines = (
     flowPlan.interactive_clarifications.length > 0
@@ -87,13 +94,14 @@ function buildClarificationRequest(
     .filter((line): line is string => Boolean(line));
 
   return [
-    "Пересобери flow Langflow с учётом этих уточнений.",
-    "Используй только stock-компоненты Langflow, без custom component и без Python-кода.",
-    "Если после этих ответов данных всё ещё недостаточно, задай не более 3 новых уточняющих вопросов на русском языке.",
+    `[clarification_round:${round}]`,
+    "Build a complete multi-component Langflow flow using only stock components, incorporating the user clarifications below.",
+    "Do not use custom components or Python code.",
+    "If the clarifications still leave critical questions open, ask at most 3 new focused questions.",
     "",
-    `Исходный запрос пользователя: ${flowPlan.user_summary}`,
+    `Original user request: ${flowPlan.user_summary}`,
     "",
-    "Уточнения:",
+    "Clarifications provided by the user:",
     ...clarificationLines,
   ].join("\n");
 }
@@ -116,15 +124,44 @@ interface UseAssistantChatReturn {
 }
 
 export function useAssistantChat(): UseAssistantChatReturn {
-  const [messages, setMessages] = useState<AssistantMessage[]>([]);
+  const [messages, setMessages] = useState<AssistantMessage[]>(() => {
+    try {
+      const raw = localStorage.getItem(CURRENT_MESSAGES_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return deserializeMessages(parsed);
+    } catch {
+      return [];
+    }
+  });
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState<AgenticStepType | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastModelRef = useRef<AssistantModel | null>(null);
-  const sessionIdRef = useRef<string>(
-    `${AGENTIC_SESSION_PREFIX}${uid.randomUUID(16)}`,
-  );
-  const [sessionId, setSessionId] = useState<string>(sessionIdRef.current);
+  const clarificationRoundRef = useRef(0);
+  const [sessionId, setSessionId] = useState<string>(() => {
+    try {
+      const savedId = localStorage.getItem(CURRENT_SESSION_ID_KEY);
+      if (savedId) return savedId;
+    } catch {
+      // ignore
+    }
+    return `${AGENTIC_SESSION_PREFIX}${uid.randomUUID(16)}`;
+  });
+  const sessionIdRef = useRef<string>(sessionId);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        CURRENT_MESSAGES_KEY,
+        JSON.stringify(serializeMessages(messages)),
+      );
+      localStorage.setItem(CURRENT_SESSION_ID_KEY, sessionIdRef.current);
+    } catch {
+      // localStorage may be unavailable
+    }
+  }, [messages]);
 
   let reactFlowStore: ReturnType<typeof useStoreApi> | null = null;
   try {
@@ -583,9 +620,14 @@ export function useAssistantChat(): UseAssistantChatReturn {
         );
       }
 
+      clarificationRoundRef.current += 1;
       const started = await sendAssistantRequest({
         displayContent: buildClarificationSummaryMessage(flowPlan, answers),
-        requestContent: buildClarificationRequest(flowPlan, answers),
+        requestContent: buildClarificationRequest(
+          flowPlan,
+          answers,
+          clarificationRoundRef.current,
+        ),
         model,
       });
 
@@ -619,9 +661,16 @@ export function useAssistantChat(): UseAssistantChatReturn {
     setMessages([]);
     setCurrentStep(null);
     setIsProcessing(false);
+    clarificationRoundRef.current = 0;
     const newId = `${AGENTIC_SESSION_PREFIX}${uid.randomUUID(16)}`;
     sessionIdRef.current = newId;
     setSessionId(newId);
+    try {
+      localStorage.removeItem(CURRENT_MESSAGES_KEY);
+      localStorage.setItem(CURRENT_SESSION_ID_KEY, newId);
+    } catch {
+      // ignore
+    }
   }, []);
 
   const loadSession = useCallback((id: string, msgs: AssistantMessage[]) => {
@@ -629,6 +678,7 @@ export function useAssistantChat(): UseAssistantChatReturn {
     setMessages(msgs);
     setCurrentStep(null);
     setIsProcessing(false);
+    clarificationRoundRef.current = 0;
     sessionIdRef.current = id;
     setSessionId(id);
   }, []);
