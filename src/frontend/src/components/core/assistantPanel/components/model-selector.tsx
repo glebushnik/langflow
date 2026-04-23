@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/utils/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/utils/utils";
 import type { AssistantModel } from "../assistant-panel.types";
 import { useEnabledModels } from "../hooks";
 
@@ -87,7 +87,7 @@ export function ModelSelector({
         disabled
       >
         <span className="text-accent-emerald-foreground">•</span>
-        <span>Loading...</span>
+        <span>Загрузка...</span>
       </Button>
     );
   }
@@ -101,7 +101,7 @@ export function ModelSelector({
         disabled
       >
         <span className="text-muted-foreground">•</span>
-        <span>No models configured</span>
+        <span>Нет настроенных моделей</span>
       </Button>
     );
   }
@@ -121,7 +121,7 @@ export function ModelSelector({
               className="h-4 w-4 shrink-0"
             />
           </span>
-          <span>{currentModel?.displayName || "Select model"}</span>
+          <span>{currentModel?.displayName || "Выбрать модель"}</span>
           <ForwardedIconComponent
             name={isOpen ? "ChevronUp" : "ChevronDown"}
             className="h-3 w-3"

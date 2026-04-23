@@ -173,12 +173,12 @@ export function AssistantInput({
         className="pointer-events-none absolute -bottom-2 left-1/2 h-16 w-3/4 -translate-x-1/2 rounded-full opacity-60 blur-2xl"
         style={{
           background:
-            "linear-gradient(90deg, rgba(186,117,255,0.4) 0%, rgba(255,50,118,0.5) 50%, rgba(186,117,255,0.4) 100%)",
+            "linear-gradient(90deg, rgba(52,211,153,0.35) 0%, rgba(16,185,129,0.45) 50%, rgba(52,211,153,0.35) 100%)",
         }}
       />
       <div
         className={cn(
-          "relative flex cursor-text flex-col rounded-md border border-border bg-background pb-2.5 transition-colors focus-within:border-muted-foreground shadow-[0_0_15px_rgba(186,117,255,0.12),0_0_30px_rgba(255,50,118,0.08)]",
+          "relative flex cursor-text flex-col rounded-md border border-border bg-background pb-2.5 transition-colors focus-within:border-muted-foreground shadow-[0_0_15px_rgba(52,211,153,0.12),0_0_30px_rgba(16,185,129,0.08)]",
           compact ? "gap-1" : "gap-4",
         )}
         onClick={() => textareaRef.current?.focus()}
@@ -195,7 +195,7 @@ export function AssistantInput({
               isProcessing
                 ? isPostGenerationStep
                   ? ""
-                  : "Working on it..."
+                  : "Обрабатываю..."
                 : (placeholder ?? idlePlaceholder)
             }
             disabled={disabled || isProcessing}
@@ -252,7 +252,7 @@ export function AssistantInput({
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
                   voiceState === "recording"
-                    ? "bg-rose-500/20 text-rose-500 hover:bg-rose-500/30 animate-pulse"
+                    ? "bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30 animate-pulse"
                     : voiceState === "transcribing"
                       ? "bg-muted-foreground/10 text-muted-foreground cursor-not-allowed"
                       : "bg-muted-foreground/15 text-muted-foreground hover:bg-muted-foreground/25",
@@ -277,7 +277,7 @@ export function AssistantInput({
               <button
                 type="button"
                 onClick={onStop}
-                title="Stop generation"
+                title="Остановить генерацию"
                 data-testid="assistant-stop-button"
                 className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted-foreground/15 text-muted-foreground transition-colors hover:bg-muted-foreground/25"
               >
@@ -293,7 +293,7 @@ export function AssistantInput({
                 className="h-8 w-8 rounded-lg"
                 onClick={handleSend}
                 disabled={!canSend}
-                title="Send message"
+                title="Отправить"
               >
                 <ForwardedIconComponent name="ArrowUp" className="h-4 w-4" />
               </Button>

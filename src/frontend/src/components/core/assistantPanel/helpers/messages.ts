@@ -1,97 +1,97 @@
 /**
- * Randomized messages for the assistant panel.
- * Each array contains 8 paraphrased variations with the same meaning.
+ * Рандомизированные сообщения для панели ассистента.
+ * Каждый массив содержит 8 перефразированных вариантов одного смысла.
  */
 
-// Header text for the reasoning loading state (synonyms of "Thinking")
+// Заголовок состояния рассуждений (синонимы «Думаю»)
 const REASONING_HEADER_MESSAGES = [
-  "Thinking...",
-  "Processing...",
-  "Working on it...",
-  "Analyzing...",
-  "Reasoning...",
-  "Please wait...",
-  "Just a moment...",
-  "Almost there...",
+  "Думаю...",
+  "Обрабатываю...",
+  "Работаю над этим...",
+  "Анализирую...",
+  "Рассуждаю...",
+  "Подождите...",
+  "Один момент...",
+  "Почти готово...",
 ];
 
-// Reasoning step messages
+// Сообщения шага анализа
 const ANALYZING_MESSAGES = [
-  "Analyzing component requirements...",
-  "Understanding your component needs...",
-  "Reviewing the component specifications...",
-  "Processing your request details...",
-  "Examining the component structure...",
-  "Interpreting your requirements...",
-  "Breaking down the component logic...",
-  "Assessing what you need...",
+  "Анализирую требования к компоненту...",
+  "Изучаю потребности компонента...",
+  "Просматриваю спецификации компонента...",
+  "Обрабатываю детали запроса...",
+  "Исследую структуру компонента...",
+  "Интерпретирую ваши требования...",
+  "Разбираю логику компонента...",
+  "Оцениваю, что вам нужно...",
 ];
 
 const IDENTIFYING_INPUTS_MESSAGES = [
-  "Identifying input parameters...",
-  "Determining required inputs...",
-  "Mapping out input fields...",
-  "Defining input specifications...",
-  "Setting up input parameters...",
-  "Configuring the inputs...",
-  "Establishing input requirements...",
-  "Working out the input structure...",
+  "Определяю входные параметры...",
+  "Выявляю необходимые входные данные...",
+  "Составляю схему полей ввода...",
+  "Формирую спецификации входных данных...",
+  "Настраиваю входные параметры...",
+  "Конфигурирую входные поля...",
+  "Устанавливаю требования к входным данным...",
+  "Разрабатываю структуру ввода...",
 ];
 
 const CHECKING_DEPENDENCIES_MESSAGES = [
-  "Checking installed libraries & dependencies...",
-  "Verifying available dependencies...",
-  "Reviewing library requirements...",
-  "Scanning for needed packages...",
-  "Confirming dependency availability...",
-  "Checking required libraries...",
-  "Validating package dependencies...",
-  "Ensuring libraries are in place...",
+  "Проверяю установленные библиотеки и зависимости...",
+  "Верифицирую доступные зависимости...",
+  "Просматриваю требования к библиотекам...",
+  "Сканирую необходимые пакеты...",
+  "Подтверждаю доступность зависимостей...",
+  "Проверяю необходимые библиотеки...",
+  "Валидирую зависимости пакетов...",
+  "Убеждаюсь, что библиотеки на месте...",
 ];
 
 const GENERATING_CODE_MESSAGES = [
-  "Generating component code...",
-  "Writing the component logic...",
-  "Building the component code...",
-  "Crafting your component...",
-  "Assembling the code structure...",
-  "Creating the component implementation...",
-  "Producing the component code...",
-  "Constructing the component...",
+  "Генерирую код компонента...",
+  "Пишу логику компонента...",
+  "Собираю код компонента...",
+  "Создаю ваш компонент...",
+  "Формирую структуру кода...",
+  "Создаю реализацию компонента...",
+  "Произвожу код компонента...",
+  "Конструирую компонент...",
 ];
 
-// Validation messages
+// Сообщения валидации
 const VALIDATING_MESSAGES = [
-  "Validating component...",
-  "Checking component validity...",
-  "Verifying the component...",
-  "Running validation checks...",
-  "Testing component integrity...",
-  "Confirming component structure...",
-  "Ensuring component is valid...",
-  "Performing validation...",
+  "Валидирую компонент...",
+  "Проверяю корректность компонента...",
+  "Верифицирую компонент...",
+  "Запускаю проверки валидации...",
+  "Тестирую целостность компонента...",
+  "Подтверждаю структуру компонента...",
+  "Убеждаюсь, что компонент валиден...",
+  "Выполняю валидацию...",
 ];
 
 const VALIDATION_FAILED_MESSAGES = [
-  "Validation failed, analyzing errors...",
-  "Found issues, reviewing errors...",
-  "Validation unsuccessful, checking problems...",
-  "Detected errors, analyzing...",
-  "Component check failed, investigating...",
-  "Issues found, examining errors...",
-  "Validation error detected, reviewing...",
-  "Problems found, analyzing issues...",
+  "Валидация не прошла, анализирую ошибки...",
+  "Обнаружены проблемы, изучаю ошибки...",
+  "Валидация неуспешна, проверяю проблемы...",
+  "Ошибки найдены, анализирую...",
+  "Проверка компонента не удалась, расследую...",
+  "Найдены проблемы, изучаю ошибки...",
+  "Обнаружена ошибка валидации, просматриваю...",
+  "Проблемы найдены, анализирую...",
 ];
 
 const RETRYING_MESSAGES = [
-  "Retrying with fixes...",
-  "Applying corrections and retrying...",
-  "Making adjustments and trying again...",
-  "Fixing issues and regenerating...",
-  "Correcting errors and retrying...",
-  "Implementing fixes...",
-  "Addressing issues and retrying...",
-  "Applying fixes and trying again...",
+  "Повторяю с исправлениями...",
+  "Применяю правки и повторяю...",
+  "Вношу изменения и пробую снова...",
+  "Исправляю проблемы и регенерирую...",
+  "Корректирую ошибки и повторяю...",
+  "Применяю исправления...",
+  "Устраняю проблемы и повторяю...",
+  "Применяю правки и пробую снова...",
 ];
 
 function getRandomMessage(messages: string[]): string {
@@ -103,7 +103,7 @@ export function getRandomThinkingMessage(): string {
   return getRandomMessage(REASONING_HEADER_MESSAGES);
 }
 
-// Descriptive messages shown in the input placeholder during post-generation steps
+// Описательные сообщения в плейсхолдере инпута во время пост-генерации
 const PLACEHOLDER_PROGRESS_MESSAGES = [
   ...ANALYZING_MESSAGES,
   ...IDENTIFYING_INPUTS_MESSAGES,

@@ -1,4 +1,3 @@
-import { memo, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -7,6 +6,7 @@ import {
   Code2,
   Loader2,
 } from "lucide-react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { AgenticProgressState } from "@/controllers/API/queries/agentic";
 
 interface AssistantLoadingStateProps {
@@ -50,7 +50,7 @@ function AssistantLoadingStateComponent({
             isReady ? "text-accent-emerald-foreground" : "text-foreground"
           }
         >
-          {isReady ? "Component ready" : progress.message || "Working..."}
+          {isReady ? "Компонент готов" : progress.message || "Обрабатываю..."}
         </span>
         {progress.className && (
           <span className="ml-auto rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
@@ -90,7 +90,7 @@ function AssistantLoadingStateComponent({
         {/* Retry counter */}
         {progress.attempt > 1 && (
           <div className="mt-3 text-xs text-muted-foreground">
-            Attempt {progress.attempt} of {progress.maxAttempts}
+            Попытка {progress.attempt} из {progress.maxAttempts}
           </div>
         )}
 
@@ -108,7 +108,7 @@ function AssistantLoadingStateComponent({
                 <ChevronRight className="h-3 w-3" />
               )}
               <Code2 className="h-3 w-3" />
-              <span>Code</span>
+              <span>Код</span>
             </button>
             {codeOpen && (
               <pre className="mt-2 max-h-[250px] overflow-auto rounded-md bg-muted p-3 text-xs leading-relaxed">
@@ -126,7 +126,7 @@ function AssistantLoadingStateComponent({
             onClick={() => onValidationComplete?.()}
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-accent-emerald-foreground/10 px-4 py-2.5 text-sm font-medium text-accent-emerald-foreground transition-colors hover:bg-accent-emerald-foreground/20"
           >
-            <span>Continue</span>
+            <span>Продолжить</span>
             <ArrowRight className="h-4 w-4" />
           </button>
         )}

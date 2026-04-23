@@ -39,7 +39,7 @@ export function AssistantHeader({
         <ShadTooltip
           content={
             isAtSessionLimit
-              ? `Maximum of ${ASSISTANT_MAX_SESSIONS} sessions reached. Delete a session to create a new one.`
+              ? `Достигнут лимит ${ASSISTANT_MAX_SESSIONS} сессий. Удалите одну, чтобы создать новую.`
               : ""
           }
           side="bottom"
@@ -58,7 +58,7 @@ export function AssistantHeader({
                 name={isAtSessionLimit ? "AlertCircle" : "Plus"}
                 className="h-4 w-4"
               />
-              {isAtSessionLimit ? "Max sessions" : "New session"}
+              {isAtSessionLimit ? "Лимит сессий" : "Новая сессия"}
             </Button>
           </span>
         </ShadTooltip>

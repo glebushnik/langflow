@@ -15,16 +15,16 @@ export function AssistantNoModelsState() {
       <div className="mb-6 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl">
         <img
           src={langflowAssistantIcon}
-          alt="Langflow Assistant"
+          alt="Ассистент"
           className="h-full w-full object-cover"
         />
       </div>
       <h3 className="mb-3 text-center text-base font-semibold leading-6 tracking-normal text-foreground">
-        No Model Provider Configured
+        Провайдер моделей не настроен
       </h3>
       <p className="mb-6 max-w-[280px] text-center text-sm text-muted-foreground">
-        To use the assistant, please configure at least one model provider in
-        your settings.
+        Для работы ассистента настройте хотя бы одного провайдера моделей в
+        настройках.
       </p>
       <Button
         variant="outline"
@@ -33,7 +33,7 @@ export function AssistantNoModelsState() {
         onClick={handleConfigureModels}
       >
         <ForwardedIconComponent name="Settings" className="h-4 w-4" />
-        Configure Model Providers
+        Настроить провайдеры
       </Button>
     </div>
   );

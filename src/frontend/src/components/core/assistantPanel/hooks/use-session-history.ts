@@ -5,8 +5,8 @@
 import { useCallback, useState } from "react";
 import {
   ASSISTANT_MAX_SESSIONS,
-  ASSISTANT_SESSIONS_STORAGE_KEY,
   ASSISTANT_SESSION_PREVIEW_LENGTH,
+  ASSISTANT_SESSIONS_STORAGE_KEY,
 } from "../assistant-panel.constants";
 import type {
   AssistantMessage,
@@ -41,7 +41,7 @@ export function useSessionHistory(
     const firstUserMsg = currentMessages.find((m) => m.role === "user");
     const preview = firstUserMsg
       ? firstUserMsg.content.slice(0, ASSISTANT_SESSION_PREVIEW_LENGTH)
-      : "New conversation";
+      : "Новый диалог";
 
     const entry: SessionHistoryEntry = {
       sessionId: currentSessionId,

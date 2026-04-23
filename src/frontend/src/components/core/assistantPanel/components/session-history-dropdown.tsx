@@ -2,6 +2,7 @@
  * Dropdown showing saved assistant sessions with switch and delete actions.
  */
 
+import moment from "moment";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import ShadTooltip from "@/components/common/shadTooltipComponent";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/utils/utils";
-import moment from "moment";
 import type { SessionHistoryEntry } from "../assistant-panel.types";
 
 interface SessionHistoryDropdownProps {
@@ -43,7 +43,7 @@ export function SessionHistoryDropdown({
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          title="Session history"
+          title="История сессий"
           data-testid="assistant-session-history"
           disabled={!hasSessions}
         >
@@ -61,9 +61,9 @@ export function SessionHistoryDropdown({
         className="z-[70] max-h-80 w-72 overflow-y-auto"
       >
         <DropdownMenuLabel className="flex items-center gap-1.5 text-xs font-semibold">
-          Session History
+          История сессий
           <ShadTooltip
-            content="Sessions are stored in your browser only and will not be preserved across different browsers or after clearing browser data."
+            content="Сессии хранятся только в вашем браузере и не сохраняются при смене браузера или очистке данных."
             side="right"
           >
             <div>
@@ -78,7 +78,7 @@ export function SessionHistoryDropdown({
 
         {!hasSessions ? (
           <div className="px-2 py-3 text-center text-xs text-muted-foreground">
-            No previous sessions
+            Нет предыдущих сессий
           </div>
         ) : (
           sessions.map((entry) => {
@@ -103,7 +103,7 @@ export function SessionHistoryDropdown({
                     {entry.firstUserMessage}
                   </span>
                   <span className="text-[10px] text-muted-foreground">
-                    {entry.messageCount} msgs
+                    {entry.messageCount} сообщ.
                     {" · "}
                     {moment(entry.lastActiveAt).fromNow()}
                   </span>

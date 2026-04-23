@@ -91,7 +91,7 @@ export function AssistantComponentResult({
   onApprove,
 }: AssistantComponentResultProps) {
   const [isViewCodeOpen, setIsViewCodeOpen] = useState(false);
-  const componentName = result.className || "Custom Component";
+  const componentName = result.className || "Кастомный компонент";
   const { description, inputs, outputs } = useMemo(
     () => parseComponentInfo(result.componentCode),
     [result.componentCode],
@@ -123,7 +123,7 @@ export function AssistantComponentResult({
         {inputs.length > 0 && (
           <div>
             <h4 className="mb-1.5 text-xs font-semibold text-foreground">
-              Inputs
+              Входы
             </h4>
             <div className="flex flex-wrap gap-1.5">
               {inputs.map((input) => (
@@ -143,7 +143,7 @@ export function AssistantComponentResult({
         {outputs.length > 0 && (
           <div>
             <h4 className="mb-1.5 text-xs font-semibold text-foreground">
-              Outputs
+              Выходы
             </h4>
             <div className="flex flex-wrap gap-1.5">
               {outputs.map((output) => (
@@ -174,12 +174,12 @@ export function AssistantComponentResult({
           {wasAddedToCanvas ? (
             <div className="flex h-8 items-center gap-1.5 text-sm font-medium text-accent-emerald-foreground">
               <Check className="h-4 w-4" />
-              <span>Added to Canvas</span>
+              <span>Добавлено на холст</span>
             </div>
           ) : isAddingToCanvas ? (
             <div className="flex h-8 items-center gap-1.5 text-sm font-medium text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Adding to Canvas...</span>
+              <span>Добавляю на холст...</span>
             </div>
           ) : (
             <button
@@ -189,7 +189,7 @@ export function AssistantComponentResult({
               onClick={onApprove}
             >
               {addToCanvasError && <RefreshCcw className="h-3.5 w-3.5" />}
-              {addToCanvasError ? "Try Again" : "Add to Canvas"}
+              {addToCanvasError ? "Повторить" : "Добавить на холст"}
             </button>
           )}
           <button
@@ -198,7 +198,7 @@ export function AssistantComponentResult({
             className="h-8 rounded-[10px] bg-zinc-700 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-600"
             onClick={() => setIsViewCodeOpen(true)}
           >
-            View Code
+            Посмотреть код
           </button>
         </div>
       </div>
