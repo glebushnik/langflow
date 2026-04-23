@@ -127,6 +127,12 @@ class TestInputSanitizationIntegration:
 class TestOffTopicIntegration:
     """Tests that off-topic intent returns refusal without calling LLM flow."""
 
+    def test_off_topic_message_should_be_russian_and_limited_to_three_questions(self):
+        """The fallback should guide the user back to Langflow in Russian with <= 3 questions."""
+        assert "Я помогаю только с задачами по Langflow" in OFF_TOPIC_REFUSAL_MESSAGE  # noqa: RUF001
+        assert "I appreciate your interest" not in OFF_TOPIC_REFUSAL_MESSAGE
+        assert OFF_TOPIC_REFUSAL_MESSAGE.count("?") <= 3
+
     @pytest.mark.asyncio
     async def test_streaming_should_reject_off_topic(self):
         """Off-topic intent should return refusal without calling flow."""
@@ -151,6 +157,25 @@ class TestOffTopicIntegration:
         complete_data = _get_complete_data(events)
         assert complete_data is not None
         assert complete_data.get("result") == OFF_TOPIC_REFUSAL_MESSAGE
+
+    @pytest.mark.asyncio
+    async def test_non_streaming_should_reject_off_topic(self):
+        """Non-streaming off-topic requests should return the same guided fallback."""
+        mock_classify = AsyncMock(return_value=_make_intent(intent="off_topic"))
+        mock_flow = AsyncMock()
+
+        with (
+            patch(f"{MODULE}.classify_intent", mock_classify),
+            patch(f"{MODULE}.execute_flow_file", mock_flow),
+        ):
+            result = await execute_flow_with_validation(
+                flow_filename="TestFlow",
+                input_value="Explain how Kubernetes works",
+                global_variables={},
+            )
+
+        mock_flow.assert_not_called()
+        assert result["result"] == OFF_TOPIC_REFUSAL_MESSAGE
 
     @pytest.mark.asyncio
     async def test_streaming_should_allow_question_intent(self):
@@ -224,6 +249,7 @@ class DangerousComponent(Component):
     @pytest.mark.asyncio
     async def test_non_streaming_should_block_dangerous_code(self):
         """Non-streaming: generated code with exec should be blocked."""
+        mock_classify = AsyncMock(return_value=_make_intent(intent="generate_component"))
         dangerous_code = """```python
 from lfx.custom import Component
 from lfx.io import MessageTextInput, Output
@@ -241,7 +267,10 @@ class EvalComponent(Component):
 
         mock_execute = AsyncMock(return_value={"result": dangerous_code})
 
-        with patch(f"{MODULE}.execute_flow_file", mock_execute):
+        with (
+            patch(f"{MODULE}.classify_intent", mock_classify),
+            patch(f"{MODULE}.execute_flow_file", mock_execute),
+        ):
             result = await execute_flow_with_validation(
                 flow_filename="TestFlow",
                 input_value="Create a component that evaluates expressions",

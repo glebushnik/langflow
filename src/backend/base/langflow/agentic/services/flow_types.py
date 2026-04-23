@@ -22,9 +22,11 @@ LANGFLOW_ASSISTANT_FLOW = "LangflowAssistant.json"
 TRANSLATION_FLOW = "translation_flow.py"
 
 OFF_TOPIC_REFUSAL_MESSAGE = (
-    "I appreciate your interest, but I'm the Langflow Assistant and can only help with "
-    "Langflow-related topics such as building components, creating flows, configuring "
-    "deployments, and troubleshooting issues. Could you rephrase your question about Langflow?"
+    "Я помогаю только с задачами по Langflow: созданием flow, компонентов, настройкой и отладкой. "  # noqa: RUF001
+    "Чтобы понять, что вам нужно, уточните, пожалуйста:\n"
+    "1. Вы хотите собрать flow, доработать существующий flow или создать компонент?\n"
+    "2. Какие входные данные приходят в систему и какой результат нужен на выходе?\n"
+    "3. Нужно использовать только stock-компоненты Langflow или допускается custom component?"
 )
 
 VALIDATION_RETRY_TEMPLATE = """The previous component code has an error. Please fix it.
