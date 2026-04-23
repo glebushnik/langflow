@@ -23,6 +23,9 @@ OPENROUTER_MODELS_DETAILED = [
     ),
     # Google via OpenRouter
     create_model_metadata(
+        provider="OpenRouter", name="google/gemini-3-flash-preview", icon="OpenRouter", tool_calling=True
+    ),
+    create_model_metadata(
         provider="OpenRouter", name="google/gemini-2.0-flash-001", icon="OpenRouter", tool_calling=True
     ),
     create_model_metadata(
