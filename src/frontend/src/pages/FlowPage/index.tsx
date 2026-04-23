@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useBlocker, useParams } from "react-router-dom";
-import { AssistantPanel } from "@/components/core/assistantPanel";
+import { AssistantWidget } from "@/components/core/assistantPanel";
 import { FlowPageSlidingContainerContent } from "@/components/core/playgroundComponent/sliding-container/components/flow-page-sliding-container";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import {
@@ -267,11 +267,7 @@ export default function FlowPage({ view }: { view?: boolean }): JSX.Element {
 
   return (
     <>
-      {/* Assistant Panel - single instance that handles both modes internally */}
-      <AssistantPanel
-        isOpen={assistantOpen}
-        onClose={() => setAssistantOpen(false)}
-      />
+      <AssistantWidget isOpen={assistantOpen} onOpenChange={setAssistantOpen} />
 
       <div className="flow-page-positioning">
         {currentFlow && (

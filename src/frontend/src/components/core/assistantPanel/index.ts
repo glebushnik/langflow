@@ -5,3 +5,4 @@ export type {
   AssistantPanelProps,
   AssistantSuggestion,
 } from "./assistant-panel.types";
+export { AssistantWidget } from "./assistant-widget";

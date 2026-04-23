@@ -64,16 +64,6 @@ jest.mock("../HelpDropdown", () => ({
   default: () => <div data-testid="help-dropdown" />,
 }));
 
-jest.mock("@/assets/langflow_assistant.svg", () => "mock-assistant-icon.svg");
-
-jest.mock("@/stores/assistantManagerStore", () => ({
-  __esModule: true,
-  default: jest.fn((selector) => {
-    const state = { toggleAssistant: jest.fn() };
-    return typeof selector === "function" ? selector(state) : state;
-  }),
-}));
-
 jest.mock("@/customization/feature-flags", () => ({
   ENABLE_INSPECTION_PANEL: false,
 }));
@@ -101,13 +91,6 @@ describe("CanvasControls", () => {
     expect(screen.getByTestId("main_canvas_controls")).toBeInTheDocument();
     expect(screen.getByTestId("controls-dropdown")).toBeInTheDocument();
     expect(screen.getByTestId("help-dropdown")).toBeInTheDocument();
-  });
-
-  it("should_render_assistant_button_with_new_badge", () => {
-    render(<CanvasControls selectedNode={null} />);
-
-    expect(screen.getByText("New")).toBeInTheDocument();
-    expect(screen.getByAltText("Langflow Assistant")).toBeInTheDocument();
   });
 
   it("should_render_sticky_note_button", () => {

@@ -355,7 +355,46 @@ def validate_model_provider_key(provider: str, variables: dict[str, str], model_
         return
 
     try:
-        if provider == "OpenAI":
+        if provider == "OpenRouter":
+            from langchain_openai import ChatOpenAI
+
+            api_key = variables.get("OPENROUTER_API_KEY")
+            if not api_key:
+                return
+            from lfx.base.models.model_metadata import OPENROUTER_BASE_URL
+
+            llm = ChatOpenAI(
+                api_key=api_key,
+                model=first_model or "openai/gpt-4o-mini",
+                base_url=OPENROUTER_BASE_URL,
+                max_tokens=1,
+            )
+            llm.invoke("test")
+
+        elif provider == "Yandex AI Studio":
+            from langchain_openai import ChatOpenAI
+
+            api_key = variables.get("YANDEX_API_KEY")
+            folder_id = variables.get("YANDEX_FOLDER_ID")
+            if not api_key or not folder_id:
+                return
+            from lfx.base.models.model_metadata import YANDEX_AI_STUDIO_BASE_URL
+
+            base_model = (first_model or "yandexgpt-lite").split("/")[-1].replace("/latest", "")
+            model_uri = f"gpt://{folder_id}/{base_model}/latest"
+            llm = ChatOpenAI(
+                api_key="unused",  # pragma: allowlist secret
+                model=model_uri,
+                base_url=YANDEX_AI_STUDIO_BASE_URL,
+                max_tokens=1,
+                default_headers={
+                    "Authorization": f"Api-Key {api_key}",
+                    "OpenAI-Project": folder_id,
+                },
+            )
+            llm.invoke("test")
+
+        elif provider == "OpenAI":
             from langchain_openai import ChatOpenAI  # type: ignore  # noqa: PGH003
 
             api_key = variables.get("OPENAI_API_KEY")

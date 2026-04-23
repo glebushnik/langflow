@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
-import { Check, FileText } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  FileText,
+  Loader2,
+  RefreshCcw,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 import type { AgenticResult } from "@/controllers/API/queries/agentic";
 import CodeAreaModal from "@/modals/codeAreaModal";
-
-const APPROVED_DISPLAY_DURATION_MS = 3000;
 
 interface FieldInfo {
   name: string;
@@ -30,17 +34,20 @@ export function parseComponentInfo(code: string | undefined) {
   // Extract inputs with type (e.g. MessageTextInput, IntInput, etc.)
   const inputRegex = /(\w+Input)\(\s*(?:[^)]*?)display_name\s*=\s*"([^"]+)"/g;
   const inputs: FieldInfo[] = [];
-  let match;
-  while ((match = inputRegex.exec(code)) !== null) {
-    inputs.push({ name: match[2], type: formatType(match[1]) });
+  for (let m = inputRegex.exec(code); m !== null; m = inputRegex.exec(code)) {
+    inputs.push({ name: m[2], type: formatType(m[1]) });
   }
 
   // Fallback: simpler pattern
   if (inputs.length === 0) {
     const simpleInputRegex =
       /(MessageTextInput|StrInput|IntInput|FloatInput|BoolInput|FileInput|DropdownInput|MultilineInput|SecretStrInput|HandleInput|DataInput)\s*\([^)]*display_name\s*=\s*"([^"]+)"/g;
-    while ((match = simpleInputRegex.exec(code)) !== null) {
-      inputs.push({ name: match[2], type: formatType(match[1]) });
+    for (
+      let m = simpleInputRegex.exec(code);
+      m !== null;
+      m = simpleInputRegex.exec(code)
+    ) {
+      inputs.push({ name: m[2], type: formatType(m[1]) });
     }
   }
 
@@ -48,23 +55,26 @@ export function parseComponentInfo(code: string | undefined) {
   const outputRegex =
     /Output\(\s*(?:[^)]*?)display_name\s*=\s*"([^"]+)"(?:[^)]*?)method\s*=\s*"(\w+)"/g;
   const outputs: FieldInfo[] = [];
-  while ((match = outputRegex.exec(code)) !== null) {
-    const methodName = match[2];
-    // Look for the method's return type annotation: def method_name(self) -> ReturnType:
+  for (let m = outputRegex.exec(code); m !== null; m = outputRegex.exec(code)) {
+    const methodName = m[2];
     const returnTypeRegex = new RegExp(
       `def\\s+${methodName}\\s*\\([^)]*\\)\\s*->\\s*(\\w+)`,
     );
     const returnMatch = code.match(returnTypeRegex);
     const returnType = returnMatch?.[1] || "Message";
-    outputs.push({ name: match[1], type: returnType });
+    outputs.push({ name: m[1], type: returnType });
   }
 
   // Fallback: outputs without method
   if (outputs.length === 0) {
     const simpleOutputRegex =
       /Output\(\s*(?:[^)]*?)display_name\s*=\s*"([^"]+)"/g;
-    while ((match = simpleOutputRegex.exec(code)) !== null) {
-      outputs.push({ name: match[1], type: "Message" });
+    for (
+      let m = simpleOutputRegex.exec(code);
+      m !== null;
+      m = simpleOutputRegex.exec(code)
+    ) {
+      outputs.push({ name: m[1], type: "Message" });
     }
   }
 
@@ -80,32 +90,20 @@ export function AssistantComponentResult({
   result,
   onApprove,
 }: AssistantComponentResultProps) {
-  const [showApproved, setShowApproved] = useState(false);
   const [isViewCodeOpen, setIsViewCodeOpen] = useState(false);
   const componentName = result.className || "Custom Component";
   const { description, inputs, outputs } = useMemo(
     () => parseComponentInfo(result.componentCode),
     [result.componentCode],
   );
-
-  useEffect(() => {
-    if (showApproved) {
-      const timer = setTimeout(() => {
-        setShowApproved(false);
-      }, APPROVED_DISPLAY_DURATION_MS);
-      return () => clearTimeout(timer);
-    }
-  }, [showApproved]);
-
-  const handleApprove = () => {
-    onApprove();
-    setShowApproved(true);
-  };
+  const isAddingToCanvas = Boolean(result.addingToCanvas);
+  const wasAddedToCanvas = Boolean(result.addedToCanvas);
+  const addToCanvasError = result.addToCanvasError;
 
   return (
     <div
       data-testid="assistant-component-result"
-      className="max-w-[80%] rounded-lg border border-border bg-muted/30 p-4"
+      className="max-w-[90%] rounded-[1.25rem] border border-border/70 bg-muted/30 p-4 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.55)] backdrop-blur-sm"
     >
       {/* Component header */}
       <div className="mb-3 flex items-center gap-3">
@@ -165,30 +163,44 @@ export function AssistantComponentResult({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2">
-        {showApproved ? (
-          <div className="flex h-8 items-center gap-1.5 text-sm font-medium text-accent-emerald-foreground">
-            <Check className="h-4 w-4" />
-            <span>Approved</span>
+      <div className="flex flex-col gap-3">
+        {addToCanvasError && (
+          <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{addToCanvasError}</span>
           </div>
-        ) : (
+        )}
+        <div className="flex items-center gap-2">
+          {wasAddedToCanvas ? (
+            <div className="flex h-8 items-center gap-1.5 text-sm font-medium text-accent-emerald-foreground">
+              <Check className="h-4 w-4" />
+              <span>Added to Canvas</span>
+            </div>
+          ) : isAddingToCanvas ? (
+            <div className="flex h-8 items-center gap-1.5 text-sm font-medium text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Adding to Canvas...</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              data-testid="assistant-approve-button"
+              className="inline-flex h-8 items-center gap-1.5 rounded-[10px] bg-white px-4 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-100"
+              onClick={onApprove}
+            >
+              {addToCanvasError && <RefreshCcw className="h-3.5 w-3.5" />}
+              {addToCanvasError ? "Try Again" : "Add to Canvas"}
+            </button>
+          )}
           <button
             type="button"
-            data-testid="assistant-approve-button"
-            className="h-8 rounded-[10px] bg-white px-4 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-100"
-            onClick={handleApprove}
+            data-testid="assistant-view-code-button"
+            className="h-8 rounded-[10px] bg-zinc-700 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-600"
+            onClick={() => setIsViewCodeOpen(true)}
           >
-            Add to Canvas
+            View Code
           </button>
-        )}
-        <button
-          type="button"
-          data-testid="assistant-view-code-button"
-          className="h-8 rounded-[10px] bg-zinc-700 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-600"
-          onClick={() => setIsViewCodeOpen(true)}
-        >
-          View Code
-        </button>
+        </div>
       </div>
 
       {result.componentCode && (

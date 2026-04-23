@@ -18,7 +18,9 @@ from lfx.base.models.openai_constants import (
     OPENAI_EMBEDDING_MODELS_DETAILED,
     OPENAI_MODELS_DETAILED,
 )
+from lfx.base.models.openrouter_constants import OPENROUTER_MODELS_DETAILED
 from lfx.base.models.watsonx_constants import WATSONX_MODELS_DETAILED
+from lfx.base.models.yandex_constants import YANDEX_MODELS_DETAILED
 
 
 @lru_cache(maxsize=1)
@@ -42,6 +44,8 @@ def get_models_detailed() -> list[list[dict]]:
         OLLAMA_MODELS_DETAILED,
         OLLAMA_EMBEDDING_MODELS_DETAILED,
         WATSONX_MODELS_DETAILED,
+        OPENROUTER_MODELS_DETAILED,
+        YANDEX_MODELS_DETAILED,
     ]
 
 

@@ -58,6 +58,71 @@ export function useAssistantChat(): UseAssistantChatReturn {
     [],
   );
 
+  const addGeneratedComponentToCanvas = useCallback(
+    async (messageId: string, code: string) => {
+      updateMessage(messageId, (msg) => ({
+        result: {
+          content: msg.result?.content ?? msg.content,
+          validated: msg.result?.validated ?? true,
+          className: msg.result?.className,
+          componentCode: code,
+          validationAttempts: msg.result?.validationAttempts,
+          validationError: msg.result?.validationError,
+          addingToCanvas: true,
+          addedToCanvas: false,
+          addToCanvasError: undefined,
+        },
+      }));
+
+      try {
+        // Backend builds the full frontend_node from code validation; empty placeholder is expected
+        const response = await validateComponent({
+          code,
+          frontend_node: {} as APIClassType,
+        });
+
+        if (!response.data) {
+          throw new Error("Assistant returned no component data");
+        }
+
+        addComponent(response.data, response.type || "CustomComponent");
+
+        updateMessage(messageId, (msg) => ({
+          result: {
+            content: msg.result?.content ?? msg.content,
+            validated: msg.result?.validated ?? true,
+            className: msg.result?.className,
+            componentCode: code,
+            validationAttempts: msg.result?.validationAttempts,
+            validationError: msg.result?.validationError,
+            addingToCanvas: false,
+            addedToCanvas: true,
+            addToCanvasError: undefined,
+          },
+        }));
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error("Failed to validate or add component to canvas:", error);
+
+        updateMessage(messageId, (msg) => ({
+          result: {
+            content: msg.result?.content ?? msg.content,
+            validated: msg.result?.validated ?? true,
+            className: msg.result?.className,
+            componentCode: code,
+            validationAttempts: msg.result?.validationAttempts,
+            validationError: msg.result?.validationError,
+            addingToCanvas: false,
+            addedToCanvas: false,
+            addToCanvasError: `Failed to add component: ${errorMessage}`,
+          },
+        }));
+      }
+    },
+    [validateComponent, addComponent, updateMessage],
+  );
+
   const handleSend = useCallback(
     async (content: string, model: AssistantModel | null) => {
       if (isProcessing) return;
@@ -133,6 +198,10 @@ export function useAssistantChat(): UseAssistantChatReturn {
               }));
             },
             onComplete: (event) => {
+              const shouldAutoAdd = Boolean(
+                event.data.validated && event.data.component_code,
+              );
+
               updateMessage(assistantMessageId, () => ({
                 status: "complete" as const,
                 content: event.data.result || "",
@@ -143,10 +212,20 @@ export function useAssistantChat(): UseAssistantChatReturn {
                   componentCode: event.data.component_code,
                   validationAttempts: event.data.validation_attempts,
                   validationError: event.data.validation_error,
+                  addingToCanvas: shouldAutoAdd,
+                  addedToCanvas: false,
+                  addToCanvasError: undefined,
                 },
               }));
               setCurrentStep(null);
               setIsProcessing(false);
+
+              if (shouldAutoAdd && event.data.component_code) {
+                void addGeneratedComponentToCanvas(
+                  assistantMessageId,
+                  event.data.component_code,
+                );
+              }
             },
             onError: (event) => {
               updateMessage(assistantMessageId, () => ({
@@ -178,7 +257,7 @@ export function useAssistantChat(): UseAssistantChatReturn {
         setIsProcessing(false);
       }
     },
-    [isProcessing, currentFlowId, updateMessage],
+    [isProcessing, currentFlowId, updateMessage, addGeneratedComponentToCanvas],
   );
 
   const handleApprove = useCallback(
@@ -187,32 +266,9 @@ export function useAssistantChat(): UseAssistantChatReturn {
       const code = componentCode || message?.result?.componentCode;
       if (!code) return;
 
-      try {
-        // Backend builds the full frontend_node from code validation; empty placeholder is expected
-        const response = await validateComponent({
-          code,
-          frontend_node: {} as APIClassType,
-        });
-
-        if (response.data) {
-          addComponent(response.data, response.type || "CustomComponent");
-        }
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error("Failed to validate or add component to canvas:", error);
-        // Show validation failure to the user instead of silently swallowing
-        updateMessage(messageId, () => ({
-          result: {
-            content: code,
-            validated: false,
-            componentCode: code,
-            validationError: `Failed to add component: ${errorMessage}`,
-          },
-        }));
-      }
+      await addGeneratedComponentToCanvas(messageId, code);
     },
-    [messages, validateComponent, addComponent, updateMessage],
+    [messages, addGeneratedComponentToCanvas],
   );
 
   const handleRetry = useCallback(

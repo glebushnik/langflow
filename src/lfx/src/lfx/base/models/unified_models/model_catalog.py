@@ -232,6 +232,8 @@ def get_language_model_options(
                 option["metadata"]["url_param"] = param_mapping["url_param"]
             if "project_id_param" in param_mapping:
                 option["metadata"]["project_id_param"] = param_mapping["project_id_param"]
+            if "fixed_base_url" in param_mapping:
+                option["metadata"]["fixed_base_url"] = param_mapping["fixed_base_url"]
 
             options.append(option)
 
@@ -415,6 +417,8 @@ def normalize_model_names_to_dicts(
                 runtime_metadata["url_param"] = param_mapping["url_param"]
             if "project_id_param" in param_mapping:
                 runtime_metadata["project_id_param"] = param_mapping["project_id_param"]
+            if "fixed_base_url" in param_mapping:
+                runtime_metadata["fixed_base_url"] = param_mapping["fixed_base_url"]
 
             # Merge base metadata with runtime metadata
             full_metadata = {**base_metadata, **runtime_metadata}

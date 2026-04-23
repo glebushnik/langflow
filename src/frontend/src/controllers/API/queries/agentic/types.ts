@@ -81,4 +81,7 @@ export interface AgenticResult {
   componentCode?: string;
   validationError?: string;
   validationAttempts?: number;
+  addingToCanvas?: boolean;
+  addedToCanvas?: boolean;
+  addToCanvasError?: string;
 }

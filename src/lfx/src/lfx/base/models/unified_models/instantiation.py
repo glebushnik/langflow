@@ -130,6 +130,37 @@ def get_llm(
     if provider in ["OpenAI", "Anthropic"]:
         kwargs["stream_usage"] = True
 
+    # Inject fixed base URL for OpenAI-compatible providers (OpenRouter, Yandex AI Studio, etc.)
+    fixed_base_url = metadata.get("fixed_base_url")
+    if not fixed_base_url and provider:
+        from lfx.base.models.model_metadata import get_provider_param_mapping as _get_mapping
+
+        fixed_base_url = _get_mapping(provider).get("fixed_base_url")
+    if fixed_base_url:
+        kwargs["base_url"] = fixed_base_url
+
+    # Yandex AI Studio: requires Api-Key auth header, OpenAI-Project header, and full model URI
+    if provider == "Yandex AI Studio":
+        provider_vars = unified_models_module.get_all_variables_for_provider(user_id, provider)
+        folder_id = provider_vars.get("YANDEX_FOLDER_ID") or os.environ.get("YANDEX_FOLDER_ID", "")
+        if not folder_id:
+            msg = (
+                "Yandex AI Studio requires a Folder ID. "
+                "Please configure YANDEX_FOLDER_ID in Settings → Model Providers."
+            )
+            raise ValueError(msg)
+        # Build full model URI: gpt://<folder_id>/<model>/latest
+        raw_model = kwargs.get("model", model_name) or model_name
+        if not raw_model.startswith("gpt://"):
+            kwargs["model"] = f"gpt://{folder_id}/{raw_model}/latest"
+        # Yandex uses Api-Key auth (not Bearer) + OpenAI-Project header for folder
+        kwargs["default_headers"] = {
+            "Authorization": f"Api-Key {api_key}",
+            "OpenAI-Project": folder_id,
+        }
+        # api_key must be non-empty for ChatOpenAI validation, but auth goes via header
+        kwargs[api_key_param] = "unused"  # pragma: allowlist secret
+
     # Add provider-specific parameters
     if provider in {"IBM WatsonX", "IBM watsonx.ai"}:
         # For watsonx, url and project_id are required parameters

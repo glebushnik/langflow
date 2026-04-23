@@ -59,8 +59,8 @@ def inject_model_into_flow(
         "model_name_param": param_mapping.get("model_name_param", provider_config.get("model_name_param", "model")),
     }
 
-    # Add extra params from param mapping (url_param, project_id_param, base_url_param)
-    for extra_param in ("url_param", "project_id_param", "base_url_param"):
+    # Add extra params from param mapping
+    for extra_param in ("url_param", "project_id_param", "base_url_param", "fixed_base_url"):
         if extra_param in param_mapping:
             metadata[extra_param] = param_mapping[extra_param]
         elif extra_param in provider_config:
@@ -91,6 +91,14 @@ def inject_model_into_flow(
     elif provider == "Ollama":
         if pv.get("OLLAMA_BASE_URL"):
             provider_fields["base_url_ollama"] = pv["OLLAMA_BASE_URL"]
+    elif provider == "Yandex AI Studio":
+        # Folder ID is needed at instantiation time to build the model URI
+        folder_id = pv.get("YANDEX_FOLDER_ID") or ""
+        if folder_id:
+            metadata["yandex_folder_id"] = folder_id
+            # Rewrite model name to full URI if not already done
+            if not model_name.startswith("gpt://"):
+                model_value[0]["name"] = f"gpt://{folder_id}/{model_name}/latest"
 
     # Inject into all Agent nodes
     for node in flow_data.get("data", {}).get("nodes", []):

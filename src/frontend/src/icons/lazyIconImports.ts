@@ -492,6 +492,10 @@ export const lazyIconsMapping = {
   Wolfram: () =>
     import("@/icons/Wolfram/Wolfram").then((mod) => ({ default: mod.default })),
   xAI: () => import("@/icons/xAI").then((mod) => ({ default: mod.XAIIcon })),
+  YandexAIStudio: () =>
+    import("@/icons/YandexAIStudio").then((mod) => ({
+      default: mod.YandexAIStudioIcon,
+    })),
   YouTube: () =>
     import("@/icons/Youtube").then((mod) => ({ default: mod.YoutubeIcon })),
   ZepMemory: () =>

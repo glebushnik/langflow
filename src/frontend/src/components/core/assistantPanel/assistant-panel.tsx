@@ -16,9 +16,9 @@ import { useAssistantChat, useEnabledModels, useSessionHistory } from "./hooks";
 let draftMessageCache = "";
 
 const PANEL_SIZE_KEY = "langflow-assistant-panel-size";
-const DEFAULT_SIZE = { width: 620, height: 600 };
-const MIN_SIZE = { width: 456, height: 400 };
-const MAX_SIZE = { width: 900, height: 800 };
+const DEFAULT_SIZE = { width: 460, height: 640 };
+const MIN_SIZE = { width: 380, height: 420 };
+const MAX_SIZE = { width: 720, height: 820 };
 
 function getStoredSize(): { width: number; height: number } {
   try {
@@ -99,11 +99,10 @@ export function AssistantPanel({ isOpen, onClose }: AssistantPanelProps) {
         el.closest?.("[data-radix-dialog-overlay]")
       )
         return;
+      if (el.closest?.("[data-assistant-widget-launcher]")) return;
       // Don't close if any panel dropdown or dialog is currently open (portals render outside panelRef)
       if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
       if (document.querySelector("[role='dialog']")) return;
-      // Don't close if clicking the canvas controls (let the toggle button handle it)
-      if (el.closest?.("[data-testid='main_canvas_controls']")) return;
       // Don't close if interacting with a resize handle
       if (el.closest?.("[data-resize-handle]")) return;
       onClose();
@@ -135,11 +134,6 @@ export function AssistantPanel({ isOpen, onClose }: AssistantPanelProps) {
     draftMessageCache = "";
     handleClearHistory();
   }, [handleStopGeneration, saveCurrentSession, handleClearHistory]);
-
-  const handleApproveAndClose = (messageId: string, componentCode?: string) => {
-    handleApprove(messageId, componentCode);
-    onClose();
-  };
 
   const hasMessages = messages.length > 0;
   const [hasExpandedOnce, setHasExpandedOnce] = useState(false);
@@ -223,30 +217,32 @@ export function AssistantPanel({ isOpen, onClose }: AssistantPanelProps) {
 
   const containerClasses = cn(
     "flex flex-col transition-[opacity,transform] duration-200 fixed shadow-xl will-change-[opacity,transform]",
-    "z-50 bottom-16 left-[calc(50%+140px)] -translate-x-1/2 rounded-2xl border border-border",
-    "opacity-100 translate-y-0 max-w-[calc(100vw-2rem)]",
+    "z-50 right-4 bottom-24 rounded-[1.75rem] border border-border/70 bg-background/95 backdrop-blur-xl",
+    "opacity-100 translate-y-0 max-w-[calc(100vw-2rem)] md:right-6",
   );
 
   const containerStyle = useExpandedSize
     ? {
-        width: panelSize.width,
+        width: `min(${panelSize.width}px, calc(100vw - 2rem))`,
         height: panelSize.height,
-        minWidth: "28.5rem",
+        minWidth: "min(28.5rem, calc(100vw - 2rem))",
         minHeight: MIN_SIZE.height,
+        maxHeight: "calc(100dvh - 7.5rem)",
       }
     : {
-        width: panelSize.width,
-        minWidth: "28.5rem",
+        width: `min(${panelSize.width}px, calc(100vw - 2rem))`,
+        minWidth: "min(28.5rem, calc(100vw - 2rem))",
       };
 
   return (
     <div
       ref={panelRef}
+      id="assistant-panel"
       data-testid="assistant-panel"
       className={containerClasses}
       style={containerStyle}
     >
-      <div className="absolute inset-0 rounded-2xl bg-background" />
+      <div className="absolute inset-0 rounded-[1.75rem] bg-background" />
 
       <div className="relative z-10 flex h-full min-h-0 flex-col overflow-hidden">
         <AssistantHeader
@@ -272,7 +268,7 @@ export function AssistantPanel({ isOpen, onClose }: AssistantPanelProps) {
                 <AssistantMessageItem
                   key={msg.id}
                   message={msg}
-                  onApprove={handleApproveAndClose}
+                  onApprove={handleApprove}
                   onRetry={hasEnabledModels ? handleRetry : undefined}
                 />
               ))}

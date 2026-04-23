@@ -113,6 +113,7 @@ import { WeaviateIcon } from "@/icons/Weaviate";
 import { WikipediaIcon } from "@/icons/Wikipedia";
 import { WolframIcon } from "@/icons/Wolfram";
 import { XAIIcon } from "@/icons/xAI";
+import { YandexAIStudioIcon } from "@/icons/YandexAIStudio";
 import { YoutubeIcon as YouTubeIcon } from "@/icons/Youtube";
 import { ZepMemoryIcon } from "@/icons/ZepMemory";
 import { AgenticsIcon } from "./Agentics";
@@ -241,6 +242,7 @@ export const eagerIconsMapping = {
   Windsurf: WindsurfIcon,
   Wolfram: WolframIcon,
   xAI: XAIIcon,
+  YandexAIStudio: YandexAIStudioIcon,
   YouTube: YouTubeIcon,
   ZepMemory: ZepMemoryIcon,
 };

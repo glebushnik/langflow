@@ -49,6 +49,9 @@ def create_model_metadata(
 
 LIVE_MODEL_PROVIDERS: list[str] = ["Ollama", "IBM WatsonX"]
 
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+YANDEX_AI_STUDIO_BASE_URL = "https://ai.api.cloud.yandex.net/v1/"
+
 # Provider metadata configuration
 # Defines the variables (credentials, URLs, etc.) required for each model provider
 #
@@ -287,6 +290,75 @@ MODEL_PROVIDER_METADATA: dict[str, Any] = {
         "mapping": {
             "model_class": "ChatWatsonx",
             "model_param": "model_id",
+        },
+    },
+    "OpenRouter": {
+        "icon": "OpenRouter",
+        "max_tokens_field_name": "max_tokens",
+        "variables": [
+            {
+                "variable_name": "OpenRouter API Key",
+                "variable_key": "OPENROUTER_API_KEY",
+                "required": True,
+                "is_secret": True,
+                "is_list": False,
+                "options": [],
+                "langchain_param": "api_key",
+                "component_metadata": {
+                    "mapping_field": "api_key",
+                    "required": False,
+                    "advanced": True,
+                    "info": "Falls back to OPENROUTER_API_KEY environment variable",
+                },
+            }
+        ],
+        "api_docs_url": "https://openrouter.ai/docs",
+        "mapping": {
+            "model_class": "ChatOpenAI",
+            "model_param": "model",
+            "fixed_base_url": OPENROUTER_BASE_URL,
+        },
+    },
+    "Yandex AI Studio": {
+        "icon": "YandexAIStudio",
+        "max_tokens_field_name": "max_tokens",
+        "variables": [
+            {
+                "variable_name": "Yandex API Key / IAM Token",
+                "variable_key": "YANDEX_API_KEY",
+                "required": True,
+                "is_secret": True,
+                "is_list": False,
+                "options": [],
+                "langchain_param": "api_key",
+                "component_metadata": {
+                    "mapping_field": "api_key",
+                    "required": False,
+                    "advanced": True,
+                    "info": "Falls back to YANDEX_API_KEY environment variable. Use an IAM token or static API key.",
+                },
+            },
+            {
+                "variable_name": "Folder ID",
+                "variable_key": "YANDEX_FOLDER_ID",
+                "required": True,
+                "is_secret": False,
+                "is_list": False,
+                "options": [],
+                "langchain_param": "folder_id",
+                "component_metadata": {
+                    "mapping_field": "yandex_folder_id",
+                    "required": False,
+                    "advanced": True,
+                    "info": "Yandex Cloud Folder ID. Falls back to YANDEX_FOLDER_ID environment variable.",
+                },
+            },
+        ],
+        "api_docs_url": "https://cloud.yandex.com/en/docs/foundation-models/concepts/api-openai",
+        "mapping": {
+            "model_class": "ChatOpenAI",
+            "model_param": "model",
+            "fixed_base_url": YANDEX_AI_STUDIO_BASE_URL,
         },
     },
 }

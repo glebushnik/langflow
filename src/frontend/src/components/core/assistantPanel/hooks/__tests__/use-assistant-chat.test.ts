@@ -51,6 +51,10 @@ describe("useAssistantChat", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPostAssistStream.mockResolvedValue(undefined);
+    mockValidateComponent.mockResolvedValue({
+      data: { display_name: "Auto Component" },
+      type: "CustomComponent",
+    });
   });
 
   describe("initial state", () => {
@@ -229,6 +233,10 @@ describe("useAssistantChat", () => {
       expect(assistantMsg.result?.componentCode).toBe(
         "class MyComponent(Component): ...",
       );
+      expect(mockValidateComponent).toHaveBeenCalledWith({
+        code: "class MyComponent(Component): ...",
+        frontend_node: {},
+      });
       expect(result.current.isProcessing).toBe(false);
       expect(result.current.currentStep).toBeNull();
     });
@@ -307,8 +315,8 @@ describe("useAssistantChat", () => {
     });
   });
 
-  describe("handleApprove", () => {
-    it("should validate and add component for a validated message", async () => {
+  describe("component insertion", () => {
+    it("should automatically validate and add component for a validated message", async () => {
       mockPostAssistStream.mockImplementation(
         async (_request: unknown, callbacks: Record<string, Function>) => {
           callbacks.onComplete({
@@ -323,22 +331,10 @@ describe("useAssistantChat", () => {
         },
       );
 
-      mockValidateComponent.mockResolvedValue({
-        data: { display_name: "TestComp" },
-        type: "TestComp",
-      });
-
       const { result } = renderHook(() => useAssistantChat());
 
-      // Send a message first to get a message with componentCode
       await act(async () => {
         await result.current.handleSend("create", TEST_MODEL);
-      });
-
-      const messageId = result.current.messages[1].id;
-
-      await act(async () => {
-        await result.current.handleApprove(messageId);
       });
 
       expect(mockValidateComponent).toHaveBeenCalledWith({
@@ -346,12 +342,13 @@ describe("useAssistantChat", () => {
         frontend_node: {},
       });
       expect(mockAddComponent).toHaveBeenCalledWith(
-        { display_name: "TestComp" },
-        "TestComp",
+        { display_name: "Auto Component" },
+        "CustomComponent",
       );
+      expect(result.current.messages[1].result?.addedToCanvas).toBe(true);
     });
 
-    it("should skip when message has no componentCode", async () => {
+    it("should skip manual insertion when message has no componentCode", async () => {
       mockPostAssistStream.mockImplementation(
         async (_request: unknown, callbacks: Record<string, Function>) => {
           callbacks.onComplete({
@@ -376,7 +373,7 @@ describe("useAssistantChat", () => {
       expect(mockValidateComponent).not.toHaveBeenCalled();
     });
 
-    it("should log error when validation fails", async () => {
+    it("should expose add-to-canvas error when auto insertion fails", async () => {
       mockPostAssistStream.mockImplementation(
         async (_request: unknown, callbacks: Record<string, Function>) => {
           callbacks.onComplete({
@@ -399,15 +396,12 @@ describe("useAssistantChat", () => {
         await result.current.handleSend("create", TEST_MODEL);
       });
 
-      const messageId = result.current.messages[1].id;
-
-      await act(async () => {
-        await result.current.handleApprove(messageId);
-      });
-
       expect(consoleSpy).toHaveBeenCalledWith(
         "Failed to validate or add component to canvas:",
         expect.any(Error),
+      );
+      expect(result.current.messages[1].result?.addToCanvasError).toBe(
+        "Failed to add component: Validation error",
       );
 
       consoleSpy.mockRestore();
