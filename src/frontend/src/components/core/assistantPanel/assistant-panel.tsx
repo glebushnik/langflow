@@ -228,7 +228,7 @@ export function AssistantPanel({ isOpen, onClose }: AssistantPanelProps) {
         height: panelSize.height,
         minWidth: "min(28.5rem, calc(100vw - 2rem))",
         minHeight: MIN_SIZE.height,
-        maxHeight: "calc(100dvh - 7.5rem)",
+        maxHeight: "calc(100dvh - 9.5rem)",
       }
     : {
         width: `min(${panelSize.width}px, calc(100vw - 2rem))`,
@@ -264,7 +264,7 @@ export function AssistantPanel({ isOpen, onClose }: AssistantPanelProps) {
             resize="smooth"
             initial="instant"
           >
-            <StickToBottom.Content className="flex min-h-full flex-col justify-end px-4 pt-4 pb-0">
+            <StickToBottom.Content className="flex min-h-full flex-col justify-end px-4 pt-4 pb-3">
               {messages.map((msg) => (
                 <AssistantMessageItem
                   key={msg.id}
