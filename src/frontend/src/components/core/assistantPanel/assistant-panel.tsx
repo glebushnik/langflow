@@ -120,6 +120,7 @@ export function AssistantPanel({ isOpen, onClose }: AssistantPanelProps) {
     handleSend,
     handleApprove,
     handleRetry,
+    handleSubmitClarifications,
     handleStopGeneration,
     handleClearHistory,
     loadSession,
@@ -270,6 +271,9 @@ export function AssistantPanel({ isOpen, onClose }: AssistantPanelProps) {
                   message={msg}
                   onApprove={handleApprove}
                   onRetry={hasEnabledModels ? handleRetry : undefined}
+                  onSubmitClarifications={
+                    hasEnabledModels ? handleSubmitClarifications : undefined
+                  }
                 />
               ))}
             </StickToBottom.Content>

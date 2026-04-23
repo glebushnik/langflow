@@ -58,6 +58,26 @@ class FlowPlanCatalogSummary(BaseModel):
     shortlisted_components: list[str] = Field(default_factory=list)
 
 
+class FlowPlanClarificationOption(BaseModel):
+    """A suggested answer option for an interactive clarification step."""
+
+    label: str
+    value: str
+
+
+class FlowPlanInteractiveClarification(BaseModel):
+    """A single interactive clarification question for the business user."""
+
+    id: str
+    question: str
+    options: list[FlowPlanClarificationOption] = Field(
+        default_factory=list,
+        min_length=2,
+        max_length=2,
+    )
+    input_placeholder: str | None = None
+
+
 class FlowPlanComponent(BaseModel):
     """A single stock Langflow component proposed for the flow."""
 
@@ -94,5 +114,7 @@ class FlowPlanResult(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     clarifying_questions: list[str] = Field(default_factory=list)
+    clarification_intro: str | None = None
+    interactive_clarifications: list[FlowPlanInteractiveClarification] = Field(default_factory=list)
     cost_estimate: FlowPlanCostEstimate | None = None
     catalog_summary: FlowPlanCatalogSummary | None = None

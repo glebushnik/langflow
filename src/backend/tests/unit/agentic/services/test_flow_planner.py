@@ -4,6 +4,8 @@ from langflow.agentic.api.schemas import (
     FlowPlanResult,
 )
 from langflow.agentic.services.flow_planner import (
+    _build_clarification_prompt,
+    _build_fallback_interactive_clarifications,
     _build_planner_prompt,
     _canonicalize_plan,
     _CatalogComponent,
@@ -113,6 +115,49 @@ def test_build_planner_prompt_should_require_instruction_fields():
 
     assert "`system_message`" in prompt
     assert "Never leave an active LLM or prompt component" in prompt
+
+
+def test_build_clarification_prompt_should_require_two_options_and_russian():
+    plan = FlowPlanResult(
+        status="needs_clarification",
+        title="Нужно уточнение",
+        summary="Нужно уточнить источник данных.",
+        user_summary="Собери flow для отчётов.",
+        approval_message="После уточнений я предложу flow.",
+        data_flow_steps=[],
+        components=[],
+        connections=[],
+        assumptions=[],
+        warnings=[],
+        clarifying_questions=["Откуда брать данные?", "В каком формате нужен результат?"],  # noqa: RUF001
+    )
+
+    prompt = _build_clarification_prompt(
+        original_request=plan.user_summary,
+        translated_request="Build a flow for reports.",
+        plan=plan,
+    )
+
+    assert "strictly in Russian" in prompt
+    assert "produce exactly 2 concise suggested options" in prompt
+    assert "input_placeholder" in prompt
+
+
+def test_build_fallback_interactive_clarifications_should_offer_two_options_per_question():
+    intro, clarifications = _build_fallback_interactive_clarifications(
+        [
+            "Откуда именно нужно собирать данные?",
+            "В каком формате вы хотите получить итоговый результат?",  # noqa: RUF001
+            "Есть ли у вас уже готовые данные для теста?",  # noqa: RUF001
+        ]
+    )
+
+    assert "ответьте на несколько коротких вопросов" in intro
+    assert len(clarifications) == 3
+    assert all(len(clarification.options) == 2 for clarification in clarifications)
+    assert clarifications[0].options[0].label == "Публичные URL"
+    assert clarifications[1].options[1].label == "JSON"
+    assert clarifications[2].options[0].label == "Есть готовые данные"
 
 
 def test_canonicalize_plan_should_autofill_language_model_fields():

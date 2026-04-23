@@ -6,7 +6,7 @@ import json
 import math
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from lfx.base.models.model_metadata import get_provider_param_mapping
 from lfx.cli.script_loader import extract_structured_result
@@ -15,13 +15,15 @@ from lfx.components.models import LanguageModelComponent
 from lfx.graph import Graph
 from lfx.log.logger import logger
 from lfx.schema.schema import InputValueRequest
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from langflow.agentic.api.schemas import (
     FlowPlanCatalogSummary,
+    FlowPlanClarificationOption,
     FlowPlanComponent,
     FlowPlanConnection,
     FlowPlanCostEstimate,
+    FlowPlanInteractiveClarification,
     FlowPlanResult,
 )
 from langflow.agentic.helpers.flow_id import normalize_flow_id
@@ -34,6 +36,7 @@ _MAX_OUTPUTS_PER_COMPONENT = 4
 _DEFAULT_VALUE_PREVIEW_LIMIT = 60
 _LOW_COST_TOKEN_THRESHOLD = 3000
 _MEDIUM_COST_TOKEN_THRESHOLD = 8000
+_MAX_CLARIFICATION_QUESTIONS = 3
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?```", re.DOTALL)
 _JSON_OBJECT_RE = re.compile(r"\{[\s\S]*\}", re.DOTALL)
 _NULLISH_FIELD_VALUES = {"", "none", "null", "undefined"}
@@ -131,6 +134,15 @@ class _CatalogComponent:
     outputs: list[dict[str, Any]]
     aliases: set[str]
     searchable_text: str
+
+
+class _InteractiveClarificationPayload(BaseModel):
+    clarification_intro: str
+    interactive_clarifications: list[FlowPlanInteractiveClarification] = Field(
+        default_factory=list,
+        min_length=1,
+        max_length=_MAX_CLARIFICATION_QUESTIONS,
+    )
 
 
 _catalog_cache: tuple[list[_CatalogComponent], dict[str, _CatalogComponent]] | None = None
@@ -471,6 +483,38 @@ def _build_planner_prompt(
     )
 
 
+def _build_clarification_prompt(
+    *,
+    original_request: str,
+    translated_request: str,
+    plan: FlowPlanResult,
+) -> str:
+    schema_json = json.dumps(_InteractiveClarificationPayload.model_json_schema(), ensure_ascii=False)
+    questions_block = "\n".join(
+        f"{index}. {question}"
+        for index, question in enumerate(plan.clarifying_questions[:_MAX_CLARIFICATION_QUESTIONS], start=1)
+    )
+    return (
+        "You convert stock-flow clarification questions into an interactive Russian assistant wizard.\n"
+        "The user is a non-technical business stakeholder.\n\n"
+        "Rules:\n"
+        "1. Keep all human-facing text strictly in Russian.\n"
+        "2. Preserve the intent of the clarification questions.\n"
+        "3. Return at most 3 questions.\n"
+        "4. For each question, produce exactly 2 concise suggested options.\n"
+        "5. Each option must have a short `label` and a complete `value` written in Russian.\n"
+        "6. Add one `input_placeholder` for free-form manual input on every question.\n"
+        "7. Keep the options practical and non-technical. Do not overwhelm the user with long menus.\n"
+        "8. Do not use markdown or explanations outside JSON.\n\n"
+        f"Original user request:\n{original_request}\n\n"
+        f"English translation of the request:\n{translated_request}\n\n"
+        f"Flow title:\n{plan.title}\n\n"
+        f"Flow summary:\n{plan.summary}\n\n"
+        f"Clarifying questions to transform:\n{questions_block}\n\n"
+        f"JSON schema:\n{schema_json}"
+    )
+
+
 def _extract_json_payload(response_text: str) -> dict[str, Any]:
     stripped = response_text.strip()
     for candidate in (stripped,):
@@ -507,6 +551,191 @@ def _truncate_text(value: str, limit: int = 220) -> str:
     if len(normalized) <= limit:
         return normalized
     return normalized[: limit - 3].rstrip() + "..."
+
+
+def _build_cost_note(
+    *,
+    prompt_tokens: int,
+    completion_tokens: int,
+    runtime_drivers: list[str],
+) -> str:
+    note = (
+        "Примерная стоимость планирования ассистентом: "
+        f"~{prompt_tokens} входных токенов и ~{completion_tokens} выходных токенов. "
+    )
+    if runtime_drivers:
+        note += "После подтверждения основные драйверы runtime-стоимости: " + ", ".join(runtime_drivers) + "."
+    else:
+        note += "После подтверждения runtime-стоимость в основном зависит от подключенных провайдеров."
+    return note
+
+
+def _get_cost_tier(total_tokens: int) -> Literal["low", "medium", "high"]:
+    if total_tokens < _LOW_COST_TOKEN_THRESHOLD:
+        return "low"
+    if total_tokens < _MEDIUM_COST_TOKEN_THRESHOLD:
+        return "medium"
+    return "high"
+
+
+def _get_runtime_drivers(component_names: set[str]) -> list[str]:
+    runtime_drivers: list[str] = []
+    if "File" in component_names or "Directory" in component_names:
+        runtime_drivers.append("парсинг файлов и OCR на ingestion-слое")
+    if component_names & {"EmbeddingModel", "OpenAIEmbeddings", "AzureOpenAIEmbeddings", "CohereEmbeddings"}:
+        runtime_drivers.append("генерация эмбеддингов")
+    if component_names & {"LocalDB", "Chroma", "QdrantVectorStoreComponent", "pgvector", "Milvus"}:
+        runtime_drivers.append("векторный поиск")
+    if component_names & {"CohereRerank", "NvidiaRerankComponent"}:
+        runtime_drivers.append("переранжирование")
+    if component_names & {"LanguageModelComponent", "OpenAIModel", "AnthropicModel", "GroqModel"}:
+        runtime_drivers.append("генерация ответа через LLM")
+    return runtime_drivers
+
+
+def _build_default_clarifying_questions(original_request: str) -> list[str]:
+    lowered_request = original_request.lower()
+    questions = [
+        "Откуда именно нужно брать данные для этого flow?",
+        "В каком формате пользователь должен получать итоговый результат?",  # noqa: RUF001
+    ]
+    if any(token in lowered_request for token in ("данн", "document", "doc", "rag", "report", "отчет", "отчёт")):
+        questions.append("Есть ли у вас уже готовые данные для проверки, или нужен тестовый набор?")  # noqa: RUF001
+    return questions[:_MAX_CLARIFICATION_QUESTIONS]
+
+
+def _build_fallback_clarification(
+    question: str,
+    index: int,
+) -> FlowPlanInteractiveClarification:
+    normalized_question = question.strip()
+    lowered_question = normalized_question.lower()
+
+    if any(token in lowered_question for token in ("тест", "готов", "sample", "example", "генератор", "demo")):
+        options = [
+            FlowPlanClarificationOption(
+                label="Есть готовые данные",
+                value="У меня уже есть готовые данные для проверки этого flow.",  # noqa: RUF001
+            ),
+            FlowPlanClarificationOption(
+                label="Нужен тестовый набор",
+                value="Нужно использовать тестовые данные или генератор данных.",
+            ),
+        ]
+        input_placeholder = "Опишите, какие данные использовать для теста"
+    elif any(
+        token in lowered_question
+        for token in ("откуда", "источник", "url", "api", "file", "файл", "база", "данные", "source")
+    ):
+        options = [
+            FlowPlanClarificationOption(
+                label="Публичные URL",
+                value="Используйте публичные URL-адреса как основной источник данных.",
+            ),
+            FlowPlanClarificationOption(
+                label="Локальные файлы",
+                value="Используйте локальные файлы как основной источник данных.",
+            ),
+        ]
+        input_placeholder = "Напишите свой источник данных: URL, файлы, БД или API"
+    elif any(
+        token in lowered_question
+        for token in ("формат", "результат", "output", "json", "таблиц", "сводк", "визуализ", "visual")
+    ):
+        options = [
+            FlowPlanClarificationOption(
+                label="Текстовая сводка",
+                value="Верните итоговый результат в виде текстовой сводки.",
+            ),
+            FlowPlanClarificationOption(
+                label="JSON",
+                value="Верните итоговый результат в формате JSON для дальнейшей обработки.",
+            ),
+        ]
+        input_placeholder = "Опишите нужный формат результата"
+    elif any(token in lowered_question for token in ("когда", "распис", "trigger", "schedule", "часто", "запуск")):
+        options = [
+            FlowPlanClarificationOption(
+                label="По запросу",
+                value="Запускайте flow только по запросу пользователя.",
+            ),
+            FlowPlanClarificationOption(
+                label="По расписанию",
+                value="Запускайте flow автоматически по расписанию.",
+            ),
+        ]
+        input_placeholder = "Опишите, когда именно нужно запускать flow"
+    else:
+        options = [
+            FlowPlanClarificationOption(
+                label="Базовый вариант",
+                value="Подойдёт стандартный вариант без сложной дополнительной настройки.",
+            ),
+            FlowPlanClarificationOption(
+                label="Свой сценарий",
+                value="Нужен кастомный сценарий с более точной настройкой под мой процесс.",  # noqa: RUF001
+            ),
+        ]
+        input_placeholder = "Введите свой вариант ответа"
+
+    return FlowPlanInteractiveClarification(
+        id=f"clarification_{index + 1}",
+        question=normalized_question or f"Уточняющий вопрос {index + 1}",
+        options=options,
+        input_placeholder=input_placeholder,
+    )
+
+
+def _build_fallback_interactive_clarifications(
+    questions: list[str],
+) -> tuple[str, list[FlowPlanInteractiveClarification]]:
+    intro = (
+        "Чтобы собрать корректный flow без лишних компонентов, ответьте на несколько коротких вопросов. "
+        "Можно выбрать готовый вариант или ввести свой."
+    )
+    interactive_questions = [
+        _build_fallback_clarification(question, index)
+        for index, question in enumerate(questions[:_MAX_CLARIFICATION_QUESTIONS])
+    ]
+    return intro, interactive_questions
+
+
+def _sanitize_interactive_clarifications(
+    clarifications: list[FlowPlanInteractiveClarification],
+    fallback_questions: list[str],
+) -> list[FlowPlanInteractiveClarification]:
+    sanitized: list[FlowPlanInteractiveClarification] = []
+    for index, clarification in enumerate(clarifications[:_MAX_CLARIFICATION_QUESTIONS]):
+        options = clarification.options[:2]
+        if len(options) != 2:  # noqa: PLR2004
+            continue
+        fallback_question = (
+            fallback_questions[index] if index < len(fallback_questions) else f"Уточняющий вопрос {index + 1}"
+        )
+        sanitized.append(
+            FlowPlanInteractiveClarification(
+                id=clarification.id or f"clarification_{index + 1}",
+                question=clarification.question.strip() or fallback_question,
+                options=[
+                    FlowPlanClarificationOption(
+                        label=option.label.strip(),
+                        value=option.value.strip(),
+                    )
+                    for option in options
+                ],
+                input_placeholder=clarification.input_placeholder or "Введите свой вариант ответа",
+            )
+        )
+
+    if len(sanitized) >= len(fallback_questions):
+        return sanitized
+
+    sanitized.extend(
+        _build_fallback_clarification(fallback_questions[index], index)
+        for index in range(len(sanitized), len(fallback_questions))
+    )
+
+    return sanitized[:_MAX_CLARIFICATION_QUESTIONS]
 
 
 def _build_resource_name(title: str, translated_request: str) -> str:
@@ -683,14 +912,14 @@ def _canonicalize_plan(
         catalog_component = lookup.get(_normalize_key(component.component_name))
         if catalog_component is None:
             warnings.append(
-                f"Component '{component.component_name}' is not available as a stock component and was removed."
+                f"Компонент '{component.component_name}' недоступен как stock-компонент и был удалён из плана."
             )
             continue
 
         input_names = {field["name"] for field in catalog_component.inputs}
         sanitized_values = {key: value for key, value in component.field_values.items() if key in input_names}
         warnings.extend(
-            f"Field '{key}' was ignored for component '{catalog_component.display_name}'."
+            f"Поле '{key}' было проигнорировано для компонента '{catalog_component.display_name}'."
             for key in component.field_values
             if key not in input_names
         )
@@ -727,14 +956,16 @@ def _canonicalize_plan(
         source_spec = component_specs.get(connection.source_id)
         target_spec = component_specs.get(connection.target_id)
         if source_spec is None or target_spec is None:
-            warnings.append("One connection referenced a component that is not in the final plan and was removed.")
+            warnings.append(
+                "Одна из связей ссылалась на компонент, которого нет в финальном плане, поэтому связь была удалена."
+            )
             continue
 
         output_names = {output["name"] for output in source_spec.outputs}
         input_names = {field["name"] for field in target_spec.inputs}
         if connection.source_output not in output_names or connection.target_field not in input_names:
             warnings.append(
-                f"Removed invalid connection {connection.source_id}.{connection.source_output} -> "
+                f"Удалена некорректная связь {connection.source_id}.{connection.source_output} -> "
                 f"{connection.target_id}.{connection.target_field}."
             )
             continue
@@ -743,7 +974,7 @@ def _canonicalize_plan(
     status = raw_plan.status
     if status == "approval_required" and (not canonical_components or not canonical_connections):
         status = "needs_clarification"
-        warnings.append("The generated plan was incomplete, so approval was not requested.")
+        warnings.append("План получился неполным, поэтому подтверждение на создание flow не запрашивалось.")
 
     incomplete_components = [
         (
@@ -764,32 +995,11 @@ def _canonicalize_plan(
                 f"{', '.join(missing_fields)}."
             )
 
-    runtime_drivers: list[str] = []
     component_names = {component.component_name for component in canonical_components}
-    if "File" in component_names or "Directory" in component_names:
-        runtime_drivers.append("file parsing and OCR during ingestion")
-    if component_names & {"EmbeddingModel", "OpenAIEmbeddings", "AzureOpenAIEmbeddings", "CohereEmbeddings"}:
-        runtime_drivers.append("embedding generation")
-    if component_names & {"LocalDB", "Chroma", "QdrantVectorStoreComponent", "pgvector", "Milvus"}:
-        runtime_drivers.append("vector search")
-    if component_names & {"CohereRerank", "NvidiaRerankComponent"}:
-        runtime_drivers.append("reranking")
-    if component_names & {"LanguageModelComponent", "OpenAIModel", "AnthropicModel", "GroqModel"}:
-        runtime_drivers.append("LLM answer generation")
+    runtime_drivers = _get_runtime_drivers(component_names)
 
     total_tokens = prompt_tokens + completion_tokens
-    if total_tokens < _LOW_COST_TOKEN_THRESHOLD:
-        tier = "low"
-    elif total_tokens < _MEDIUM_COST_TOKEN_THRESHOLD:
-        tier = "medium"
-    else:
-        tier = "high"
-
-    note = f"Approximate assistant planning cost: ~{prompt_tokens} prompt tokens + ~{completion_tokens} output tokens. "
-    if runtime_drivers:
-        note += "Runtime cost drivers after approval: " + ", ".join(runtime_drivers) + "."
-    else:
-        note += "Runtime costs depend mostly on the connected providers after approval."
+    tier = _get_cost_tier(total_tokens)
 
     catalog_summary = FlowPlanCatalogSummary(
         total_stock_components=total_stock_components,
@@ -809,7 +1019,11 @@ def _canonicalize_plan(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 total_tokens=total_tokens,
-                note=note,
+                note=_build_cost_note(
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    runtime_drivers=runtime_drivers,
+                ),
             ),
             "catalog_summary": catalog_summary,
         }
@@ -873,6 +1087,84 @@ async def _execute_planner_graph(
     return extract_structured_result(results)
 
 
+async def _add_interactive_clarifications(
+    *,
+    plan: FlowPlanResult,
+    original_request: str,
+    translated_request: str,
+    global_variables: dict[str, str],
+    user_id: str | None,
+    provider: str | None,
+    model_name: str | None,
+    api_key_var: str | None,
+) -> FlowPlanResult:
+    questions = plan.clarifying_questions[:_MAX_CLARIFICATION_QUESTIONS] or _build_default_clarifying_questions(
+        original_request
+    )
+    prompt = _build_clarification_prompt(
+        original_request=original_request,
+        translated_request=translated_request,
+        plan=plan.model_copy(update={"clarifying_questions": questions}),
+    )
+    planner_input = json.dumps(
+        {
+            "original_request": original_request,
+            "clarifying_questions": questions,
+        },
+        ensure_ascii=False,
+    )
+    clarification_prompt_tokens = _estimate_tokens(prompt) + _estimate_tokens(planner_input)
+
+    try:
+        result = await _execute_planner_graph(
+            input_value=planner_input,
+            system_prompt=prompt,
+            global_variables=global_variables,
+            user_id=user_id,
+            provider=provider,
+            model_name=model_name,
+            api_key_var=api_key_var,
+        )
+        response_text = str(result.get("result") or result.get("text") or result)
+        clarification_completion_tokens = _estimate_tokens(response_text)
+        payload = _InteractiveClarificationPayload.model_validate(_extract_json_payload(response_text))
+        clarification_intro = payload.clarification_intro.strip()
+        interactive_clarifications = _sanitize_interactive_clarifications(
+            payload.interactive_clarifications,
+            questions,
+        )
+    except (ValidationError, ValueError, TypeError) as exc:
+        await logger.awarning(f"Clarification planner returned invalid output: {exc}")
+        clarification_completion_tokens = 0
+        clarification_intro, interactive_clarifications = _build_fallback_interactive_clarifications(questions)
+
+    updated_cost = plan.cost_estimate
+    if updated_cost is not None:
+        prompt_tokens = updated_cost.prompt_tokens + clarification_prompt_tokens
+        completion_tokens = updated_cost.completion_tokens + clarification_completion_tokens
+        runtime_drivers = _get_runtime_drivers({component.component_name for component in plan.components})
+        updated_cost = FlowPlanCostEstimate(
+            tier=_get_cost_tier(prompt_tokens + completion_tokens),
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            note=_build_cost_note(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                runtime_drivers=runtime_drivers,
+            ),
+        )
+
+    return plan.model_copy(
+        update={
+            "clarifying_questions": questions,
+            "clarification_intro": clarification_intro,
+            "interactive_clarifications": interactive_clarifications,
+            "cost_estimate": updated_cost,
+        }
+    )
+
+
 async def plan_stock_flow(
     *,
     original_request: str,
@@ -909,27 +1201,26 @@ async def plan_stock_flow(
     except (ValidationError, ValueError, TypeError) as exc:
         await logger.awarning(f"Flow planner returned invalid output: {exc}")
         completion_tokens = _estimate_tokens("")
-        return FlowPlanResult(
+        fallback_plan = FlowPlanResult(
             status="needs_clarification",
-            title="Need More Detail",
-            summary="I could not turn this request into a reliable stock-component flow yet.",
+            title="Нужно уточнение",
+            summary="Пока не удалось собрать надёжный план flow только из stock-компонентов.",
             user_summary=original_request,
-            approval_message="Please confirm the goal after clarifying the missing details.",
+            approval_message=(
+                "После уточнений я предложу минимальную схему и попрошу подтверждение перед созданием flow."
+            ),
             data_flow_steps=[],
             components=[],
             connections=[],
             assumptions=[],
-            warnings=["The planning model returned an invalid response and the plan was discarded."],
-            clarifying_questions=[
-                "What should be the main input source for this flow?",
-                "What output do you expect at the end of the flow?",
-            ],
+            warnings=["Планировщик вернул невалидный ответ, поэтому план был отброшен."],
+            clarifying_questions=_build_default_clarifying_questions(original_request),
             cost_estimate=FlowPlanCostEstimate(
                 tier="low",
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 total_tokens=prompt_tokens + completion_tokens,
-                note="The planner could not produce a valid stock flow. No implementation was started.",
+                note="Планировщик не смог собрать валидный stock-flow. Создание flow не запускалось.",
             ),
             catalog_summary=FlowPlanCatalogSummary(
                 total_stock_components=len(catalog),
@@ -937,8 +1228,18 @@ async def plan_stock_flow(
                 shortlisted_components=[component.name for component in shortlisted_components],
             ),
         )
+        return await _add_interactive_clarifications(
+            plan=fallback_plan,
+            original_request=original_request,
+            translated_request=translated_request,
+            global_variables=global_variables,
+            user_id=user_id,
+            provider=provider,
+            model_name=model_name,
+            api_key_var=api_key_var,
+        )
 
-    return _canonicalize_plan(
+    canonical_plan = _canonicalize_plan(
         raw_plan=parsed_plan,
         lookup=lookup,
         original_request=original_request,
@@ -950,4 +1251,17 @@ async def plan_stock_flow(
         shortlisted_components=shortlisted_components,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
+    )
+    if canonical_plan.status != "needs_clarification":
+        return canonical_plan
+
+    return await _add_interactive_clarifications(
+        plan=canonical_plan,
+        original_request=original_request,
+        translated_request=translated_request,
+        global_variables=global_variables,
+        user_id=user_id,
+        provider=provider,
+        model_name=model_name,
+        api_key_var=api_key_var,
     )

@@ -7,6 +7,7 @@ import { cn } from "@/utils/utils";
 import { getAssistantPlaceholder } from "../assistant-panel.constants";
 import type { AssistantModel } from "../assistant-panel.types";
 import { getRandomPlaceholderMessage } from "../helpers/messages";
+import { useVoiceInput } from "../hooks/use-voice-input";
 import { ModelSelector } from "./model-selector";
 
 // Steps where the "thinking" animation is showing in the message area
@@ -127,6 +128,23 @@ export function AssistantInput({
     onDraftChange?.(value);
   };
 
+  const {
+    state: voiceState,
+    isSupported: voiceSupported,
+    toggle: toggleVoice,
+  } = useVoiceInput({
+    onTranscript: (text) => {
+      setMessage((prev) => {
+        const updated = (prev + (prev ? " " : "") + text).slice(
+          0,
+          MAX_MESSAGE_LENGTH,
+        );
+        onDraftChange?.(updated);
+        return updated;
+      });
+    },
+  });
+
   const handleSend = () => {
     const trimmedMessage = message.trim();
     if (!trimmedMessage || disabled || isProcessing) return;
@@ -217,6 +235,43 @@ export function AssistantInput({
               >
                 {charsRemaining}
               </span>
+            )}
+            {voiceSupported && !isProcessing && (
+              <button
+                type="button"
+                onClick={() => void toggleVoice()}
+                disabled={voiceState === "transcribing"}
+                title={
+                  voiceState === "recording"
+                    ? "Остановить и транскрибировать"
+                    : voiceState === "transcribing"
+                      ? "Транскрибирование..."
+                      : "Голосовой ввод"
+                }
+                data-testid="assistant-voice-button"
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+                  voiceState === "recording"
+                    ? "bg-rose-500/20 text-rose-500 hover:bg-rose-500/30 animate-pulse"
+                    : voiceState === "transcribing"
+                      ? "bg-muted-foreground/10 text-muted-foreground cursor-not-allowed"
+                      : "bg-muted-foreground/15 text-muted-foreground hover:bg-muted-foreground/25",
+                )}
+              >
+                <ForwardedIconComponent
+                  name={
+                    voiceState === "recording"
+                      ? "MicOff"
+                      : voiceState === "transcribing"
+                        ? "Loader2"
+                        : "Mic"
+                  }
+                  className={cn(
+                    "h-4 w-4",
+                    voiceState === "transcribing" && "animate-spin",
+                  )}
+                />
+              </button>
             )}
             {isProcessing ? (
               <button

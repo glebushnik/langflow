@@ -80,6 +80,18 @@ export interface AgenticFlowPlanCatalogSummary {
   shortlisted_components: string[];
 }
 
+export interface AgenticFlowPlanClarificationOption {
+  label: string;
+  value: string;
+}
+
+export interface AgenticFlowPlanInteractiveClarification {
+  id: string;
+  question: string;
+  options: AgenticFlowPlanClarificationOption[];
+  input_placeholder?: string;
+}
+
 export interface AgenticFlowPlanComponent {
   id: string;
   component_name: string;
@@ -110,6 +122,8 @@ export interface AgenticFlowPlanResult {
   assumptions: string[];
   warnings: string[];
   clarifying_questions: string[];
+  clarification_intro?: string;
+  interactive_clarifications: AgenticFlowPlanInteractiveClarification[];
   cost_estimate?: AgenticFlowPlanCostEstimate;
   catalog_summary?: AgenticFlowPlanCatalogSummary;
 }

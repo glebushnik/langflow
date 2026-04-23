@@ -37,10 +37,10 @@ export function AssistantWidget({
           </span>
           <span className="hidden min-w-0 sm:flex sm:flex-col">
             <span className="text-sm font-semibold leading-4 text-foreground">
-              AI Builder
+              Ассистент-Копилот
             </span>
             <span className="text-xs leading-4 text-muted-foreground">
-              Describe a component
+              Опишите флоу
             </span>
           </span>
           <span className="hidden rounded-full bg-rose-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-rose-700 sm:inline-flex">

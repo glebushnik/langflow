@@ -28,8 +28,8 @@ describe("AssistantWidget", () => {
     render(<AssistantWidget isOpen={false} onOpenChange={jest.fn()} />);
 
     expect(screen.getByTestId("assistant-button")).toBeInTheDocument();
-    expect(screen.getByText("AI Builder")).toBeInTheDocument();
-    expect(screen.getByText("Describe a component")).toBeInTheDocument();
+    expect(screen.getByText("Ассистент-Копилот")).toBeInTheDocument();
+    expect(screen.getByText("Describe a workflow")).toBeInTheDocument();
   });
 
   it("toggles the assistant open state from the launcher", () => {

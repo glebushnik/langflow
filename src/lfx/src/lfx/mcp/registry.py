@@ -62,7 +62,7 @@ def search_registry(
 
 
 def describe_component(registry: dict[str, dict], component_type: str) -> dict[str, Any]:
-    """Describe a component type's inputs, outputs, and fields. Pure function."""
+    """Describe the workflow type's inputs, outputs, and fields. Pure function."""
     if component_type not in registry:
         available = ", ".join(sorted(registry.keys())[:20])
         msg = f"Unknown component: {component_type}. Available: {available}..."

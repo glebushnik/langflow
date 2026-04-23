@@ -4,11 +4,14 @@ This module provides the HTTP endpoints for the Langflow Assistant.
 All business logic is delegated to service modules.
 """
 
+import base64
 import uuid
 from dataclasses import dataclass
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
+import httpx
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from lfx.base.models.unified_models import (
     get_all_variables_for_provider,
@@ -310,3 +313,74 @@ async def assist_stream(
             "Connection": "keep-alive",
         },
     )
+
+
+_TRANSCRIBE_MODEL = "google/gemini-3.1-flash-lite-preview"
+_OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+_TRANSCRIBE_PROMPT = (
+    "Transcribe the audio exactly as spoken. "
+    "Return only the transcribed text with no explanations, labels, or formatting."
+)
+
+
+@router.post("/transcribe")
+async def transcribe_audio(
+    current_user: CurrentActiveUser,
+    audio: Annotated[UploadFile, File()],
+) -> dict:
+    """Transcribe an audio clip using Gemini via OpenRouter.
+
+    Returns {"transcript": "<text>"}.
+    """
+    provider_vars = get_all_variables_for_provider(current_user.id, "OpenRouter")
+    api_key = provider_vars.get("OPENROUTER_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="OpenRouter API key is not configured. Please add it in Settings > Model Providers.",
+        )
+
+    audio_bytes = await audio.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Empty audio file.")
+
+    audio_b64 = base64.b64encode(audio_bytes).decode()
+    mime = audio.content_type or "audio/webm"
+
+    payload = {
+        "model": _TRANSCRIBE_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": _TRANSCRIBE_PROMPT},
+                    {
+                        "type": "input_audio",
+                        "input_audio": {"data": audio_b64, "format": mime.split("/")[-1]},
+                    },
+                ],
+            }
+        ],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                _OPENROUTER_API_URL,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        resp.raise_for_status()
+        data = resp.json()
+        transcript = data["choices"][0]["message"]["content"] or ""
+    except httpx.HTTPStatusError as exc:
+        logger.error(f"OpenRouter transcription error: {exc.response.text}")
+        raise HTTPException(status_code=502, detail="Transcription service returned an error.") from exc
+    except Exception as exc:
+        logger.error(f"Transcription failed: {exc}")
+        raise HTTPException(status_code=502, detail="Transcription failed.") from exc
+
+    return {"transcript": transcript.strip()}

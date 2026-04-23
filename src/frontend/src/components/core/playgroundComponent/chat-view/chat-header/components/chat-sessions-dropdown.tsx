@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,7 +83,7 @@ export function ChatSessionsDropdown({
                   }}
                 >
                   <ForwardedIconComponent name="Plus" className="h-4 w-4" />
-                  New Session
+                  Новая сессия
                 </DropdownMenuItem>
               </DropdownMenuGroup>
             </div>

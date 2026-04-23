@@ -48,6 +48,39 @@ const TEST_MODEL = {
   displayName: "GPT-4",
 };
 
+const TEST_FLOW_PLAN = {
+  status: "needs_clarification" as const,
+  title: "Нужно уточнение",
+  summary: "Нужно уточнить источник данных.",
+  user_summary: "Собери flow для отчётов.",
+  approval_message: "После уточнений я предложу flow.",
+  data_flow_steps: [],
+  components: [],
+  connections: [],
+  assumptions: [],
+  warnings: [],
+  clarifying_questions: ["Откуда брать данные?"],
+  clarification_intro: "Ответьте на короткий вопрос.",
+  interactive_clarifications: [
+    {
+      id: "source",
+      question: "Откуда брать данные?",
+      options: [
+        {
+          label: "Публичные URL",
+          value:
+            "Используйте публичные URL-адреса как основной источник данных.",
+        },
+        {
+          label: "Локальные файлы",
+          value: "Используйте локальные файлы как основной источник данных.",
+        },
+      ],
+      input_placeholder: "Укажите источник данных",
+    },
+  ],
+};
+
 describe("useAssistantChat", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -312,7 +345,7 @@ describe("useAssistantChat", () => {
 
       expect(result.current.messages[1].status).toBe("error");
       expect(result.current.messages[1].error).toBe(
-        "Failed to connect to assistant",
+        "Не удалось подключиться к ассистенту",
       );
       expect(result.current.isProcessing).toBe(false);
     });
@@ -623,6 +656,65 @@ describe("useAssistantChat", () => {
 
       const sessionId = mockPostAssistStream.mock.calls[0][0].session_id;
       expect(sessionId).toMatch(/^agentic_/);
+    });
+
+    it("should_submit_clarifications_as_a_follow_up_flow_request", async () => {
+      mockPostAssistStream
+        .mockImplementationOnce(
+          async (_request: unknown, callbacks: Record<string, Function>) => {
+            callbacks.onComplete({
+              event: "complete",
+              data: {
+                result: "Нужно уточнить входные данные",
+                validated: false,
+                flow_plan: TEST_FLOW_PLAN,
+              },
+            });
+          },
+        )
+        .mockImplementationOnce(
+          async (_request: unknown, callbacks: Record<string, Function>) => {
+            callbacks.onComplete({
+              event: "complete",
+              data: {
+                result: "Обновлённый план готов",
+                validated: false,
+              },
+            });
+          },
+        );
+
+      const { result } = renderHook(() => useAssistantChat());
+
+      await act(async () => {
+        await result.current.handleSend("Собери flow для отчётов.", TEST_MODEL);
+      });
+
+      const clarificationMessageId = result.current.messages[1].id;
+
+      await act(async () => {
+        await result.current.handleSubmitClarifications(
+          clarificationMessageId,
+          {
+            source:
+              "Используйте публичные URL-адреса как основной источник данных.",
+          },
+        );
+      });
+
+      expect(mockPostAssistStream).toHaveBeenCalledTimes(2);
+      expect(mockPostAssistStream.mock.calls[1][0].input_value).toContain(
+        "Пересобери flow Langflow с учётом этих уточнений.",
+      );
+      expect(mockPostAssistStream.mock.calls[1][0].input_value).toContain(
+        "Исходный запрос пользователя: Собери flow для отчётов.",
+      );
+      expect(mockPostAssistStream.mock.calls[1][0].input_value).toContain(
+        "Ответ: Используйте публичные URL-адреса как основной источник данных.",
+      );
+      expect(result.current.messages[2].content).toContain(
+        "Уточнения по flow:",
+      );
     });
   });
 });

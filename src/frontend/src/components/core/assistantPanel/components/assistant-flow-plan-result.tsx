@@ -8,18 +8,50 @@ import {
   RefreshCcw,
   ShieldCheck,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import type { AgenticResult } from "@/controllers/API/queries/agentic";
 
 interface AssistantFlowPlanResultProps {
   result: AgenticResult;
   onApprove: () => void;
+  onSubmitClarifications?: (answers: Record<string, string>) => Promise<void>;
 }
+
+const COST_TIER_LABELS = {
+  low: "Низкая оценка токенов",
+  medium: "Средняя оценка токенов",
+  high: "Высокая оценка токенов",
+} as const;
 
 export function AssistantFlowPlanResult({
   result,
   onApprove,
+  onSubmitClarifications,
 }: AssistantFlowPlanResultProps) {
   const flowPlan = result.flowPlan;
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [manualAnswer, setManualAnswer] = useState("");
+  const [clarificationError, setClarificationError] = useState<string | null>(
+    null,
+  );
+  const [isSubmittingClarifications, setIsSubmittingClarifications] =
+    useState(false);
+
+  useEffect(() => {
+    setAnswers({});
+    setManualAnswer("");
+    setClarificationError(null);
+    setIsSubmittingClarifications(false);
+  }, [flowPlan?.title, flowPlan?.summary, flowPlan?.clarification_intro]);
+
+  const interactiveClarifications = flowPlan?.interactive_clarifications ?? [];
+  const currentClarification = useMemo(
+    () =>
+      interactiveClarifications.find(
+        (clarification) => !answers[clarification.id],
+      ),
+    [answers, interactiveClarifications],
+  );
 
   if (!flowPlan) {
     return null;
@@ -30,6 +62,59 @@ export function AssistantFlowPlanResult({
   const wasAddedToCanvas = Boolean(result.addedToCanvas);
   const addToCanvasError = result.addToCanvasError;
   const cost = flowPlan.cost_estimate;
+  const hasInteractiveClarifications =
+    flowPlan.status === "needs_clarification" &&
+    interactiveClarifications.length > 0;
+  const answeredCount = interactiveClarifications.filter(
+    (clarification) => answers[clarification.id],
+  ).length;
+
+  const submitClarifications = async (nextAnswers: Record<string, string>) => {
+    if (!onSubmitClarifications) {
+      return;
+    }
+
+    setIsSubmittingClarifications(true);
+    try {
+      await onSubmitClarifications(nextAnswers);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Не удалось отправить уточнения. Попробуйте ещё раз.";
+      setClarificationError(message);
+    } finally {
+      setIsSubmittingClarifications(false);
+    }
+  };
+
+  const handleClarificationAnswer = async (answer: string) => {
+    if (!currentClarification || !onSubmitClarifications) {
+      return;
+    }
+
+    const normalizedAnswer = answer.trim();
+    if (!normalizedAnswer) {
+      return;
+    }
+
+    const nextAnswers = {
+      ...answers,
+      [currentClarification.id]: normalizedAnswer,
+    };
+
+    setAnswers(nextAnswers);
+    setManualAnswer("");
+    setClarificationError(null);
+
+    const isLastQuestion =
+      answeredCount + 1 >= interactiveClarifications.length;
+    if (!isLastQuestion) {
+      return;
+    }
+
+    await submitClarifications(nextAnswers);
+  };
 
   return (
     <div
@@ -47,7 +132,7 @@ export function AssistantFlowPlanResult({
             </span>
             {cost && (
               <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {cost.tier} token cost
+                {COST_TIER_LABELS[cost.tier]}
               </span>
             )}
           </div>
@@ -61,7 +146,7 @@ export function AssistantFlowPlanResult({
         <div className="rounded-xl border border-border/60 bg-background/50 p-3">
           <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <MessageSquareQuote className="h-3.5 w-3.5" />
-            <span>Business Summary</span>
+            <span>Кратко для бизнеса</span>
           </div>
           <p className="text-sm text-foreground">{flowPlan.user_summary}</p>
         </div>
@@ -69,7 +154,7 @@ export function AssistantFlowPlanResult({
         {flowPlan.data_flow_steps.length > 0 && (
           <div>
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Data Flow
+              Поток данных
             </div>
             <div className="space-y-2">
               {flowPlan.data_flow_steps.map((step, index) => (
@@ -88,7 +173,7 @@ export function AssistantFlowPlanResult({
         {flowPlan.components.length > 0 && (
           <div>
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Stock Components
+              Стоковые компоненты
             </div>
             <div className="flex flex-wrap gap-1.5">
               {flowPlan.components.map((component) => (
@@ -107,7 +192,7 @@ export function AssistantFlowPlanResult({
         {flowPlan.assumptions.length > 0 && (
           <div>
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Assumptions
+              Допущения
             </div>
             <div className="space-y-1.5">
               {flowPlan.assumptions.map((assumption, index) => (
@@ -126,7 +211,7 @@ export function AssistantFlowPlanResult({
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
               <AlertCircle className="h-3.5 w-3.5" />
-              <span>Warnings</span>
+              <span>Предупреждения</span>
             </div>
             <div className="space-y-1.5">
               {flowPlan.warnings.map((warning, index) => (
@@ -141,29 +226,149 @@ export function AssistantFlowPlanResult({
           </div>
         )}
 
-        {flowPlan.clarifying_questions.length > 0 && (
+        {hasInteractiveClarifications && (
           <div className="rounded-xl border border-border/60 bg-background/50 p-3">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Clarifying Questions
+              Уточняющие вопросы
             </div>
-            <div className="space-y-1.5">
-              {flowPlan.clarifying_questions.map((question, index) => (
-                <p
-                  key={`${question}-${index}`}
-                  className="text-sm text-foreground"
+
+            {flowPlan.clarification_intro && (
+              <p className="mb-3 text-sm text-foreground">
+                {flowPlan.clarification_intro}
+              </p>
+            )}
+
+            {interactiveClarifications
+              .filter((clarification) => answers[clarification.id])
+              .map((clarification, index) => (
+                <div
+                  key={clarification.id}
+                  className="mb-3 rounded-xl border border-border/60 bg-muted/30 p-3"
                 >
-                  {question}
-                </p>
+                  <div className="mb-1 text-xs font-medium text-muted-foreground">
+                    Ответ {index + 1}
+                  </div>
+                  <p className="text-sm text-foreground">
+                    {clarification.question}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {answers[clarification.id]}
+                  </p>
+                </div>
               ))}
-            </div>
+
+            {currentClarification && (
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                <div className="mb-1 text-xs font-medium text-muted-foreground">
+                  Вопрос {answeredCount + 1} из{" "}
+                  {interactiveClarifications.length}
+                </div>
+                <p className="mb-3 text-sm text-foreground">
+                  {currentClarification.question}
+                </p>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {currentClarification.options.map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      className="rounded-xl border border-border/70 bg-background px-3 py-2 text-left text-sm text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5"
+                      disabled={isSubmittingClarifications}
+                      onClick={() =>
+                        void handleClarificationAnswer(option.value)
+                      }
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    value={manualAnswer}
+                    onChange={(event) => setManualAnswer(event.target.value)}
+                    placeholder={
+                      currentClarification.input_placeholder ||
+                      "Введите свой вариант ответа"
+                    }
+                    disabled={isSubmittingClarifications}
+                    className="h-10 flex-1 rounded-xl border border-border/70 bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && manualAnswer.trim()) {
+                        event.preventDefault();
+                        void handleClarificationAnswer(manualAnswer);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={
+                      isSubmittingClarifications ||
+                      manualAnswer.trim().length === 0
+                    }
+                    onClick={() => void handleClarificationAnswer(manualAnswer)}
+                  >
+                    {answeredCount + 1 >= interactiveClarifications.length
+                      ? "Отправить ответы"
+                      : "Продолжить"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!currentClarification && isSubmittingClarifications && (
+              <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Пересобираю flow с учётом уточнений...</span>
+              </div>
+            )}
+
+            {clarificationError && (
+              <div className="mt-3 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>{clarificationError}</span>
+                </div>
+                {!currentClarification && (
+                  <button
+                    type="button"
+                    className="mt-2 inline-flex h-8 items-center rounded-lg border border-destructive/30 px-3 text-xs font-medium transition-colors hover:bg-destructive/10"
+                    onClick={() => void submitClarifications(answers)}
+                  >
+                    Повторить отправку
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
+
+        {!hasInteractiveClarifications &&
+          flowPlan.clarifying_questions.length > 0 && (
+            <div className="rounded-xl border border-border/60 bg-background/50 p-3">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Уточняющие вопросы
+              </div>
+              <div className="space-y-1.5">
+                {flowPlan.clarifying_questions.map((question, index) => (
+                  <p
+                    key={`${question}-${index}`}
+                    className="text-sm text-foreground"
+                  >
+                    {question}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
 
         {cost && (
           <div className="rounded-xl border border-border/60 bg-background/50 p-3">
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <ShieldCheck className="h-3.5 w-3.5" />
-              <span>Planning Cost</span>
+              <span>Оценка стоимости</span>
             </div>
             <p className="text-sm text-foreground">{cost.note}</p>
           </div>
@@ -182,12 +387,12 @@ export function AssistantFlowPlanResult({
           {wasAddedToCanvas ? (
             <div className="flex h-8 items-center gap-1.5 text-sm font-medium text-accent-emerald-foreground">
               <Check className="h-4 w-4" />
-              <span>Added to Canvas</span>
+              <span>Добавлено на canvas</span>
             </div>
           ) : isAddingToCanvas ? (
             <div className="flex h-8 items-center gap-1.5 text-sm font-medium text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Adding to Canvas...</span>
+              <span>Добавляю на canvas...</span>
             </div>
           ) : canApprove ? (
             <button
@@ -197,11 +402,13 @@ export function AssistantFlowPlanResult({
               onClick={onApprove}
             >
               {addToCanvasError && <RefreshCcw className="h-3.5 w-3.5" />}
-              {addToCanvasError ? "Try Again" : "Approve and Add to Canvas"}
+              {addToCanvasError
+                ? "Повторить"
+                : "Подтвердить и добавить на canvas"}
             </button>
           ) : (
             <div className="text-sm text-muted-foreground">
-              Approval is blocked until the open questions are resolved.
+              Сначала ответьте на уточняющие вопросы.
             </div>
           )}
         </div>

@@ -17,6 +17,10 @@ interface AssistantMessageItemProps {
   message: AssistantMessage;
   onApprove?: (messageId: string, componentCode?: string) => void;
   onRetry?: (messageId: string) => void;
+  onSubmitClarifications?: (
+    messageId: string,
+    answers: Record<string, string>,
+  ) => Promise<void>;
 }
 
 function ThinkingIndicator({ message }: { message: string }) {
@@ -42,6 +46,7 @@ export function AssistantMessageItem({
   message,
   onApprove,
   onRetry,
+  onSubmitClarifications,
 }: AssistantMessageItemProps) {
   const isUser = message.role === "user";
   const isStreaming = message.status === "streaming";
@@ -134,7 +139,7 @@ export function AssistantMessageItem({
     if (message.status === "cancelled") {
       return (
         <span className="text-sm text-muted-foreground/60 italic">
-          Cancelled
+          Остановлено
         </span>
       );
     }
@@ -146,6 +151,11 @@ export function AssistantMessageItem({
         <AssistantFlowPlanResult
           result={message.result}
           onApprove={() => onApprove?.(message.id)}
+          onSubmitClarifications={
+            onSubmitClarifications
+              ? (answers) => onSubmitClarifications(message.id, answers)
+              : undefined
+          }
         />
       );
     }

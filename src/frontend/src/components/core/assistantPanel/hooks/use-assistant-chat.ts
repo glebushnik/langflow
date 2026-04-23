@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import ShortUniqueId from "short-unique-id";
 import { buildFlowPlanCanvasData } from "@/components/core/assistantPanel/helpers/flow-plan";
 import {
+  type AgenticFlowPlanResult,
   type AgenticStepType,
   postAssistStream,
 } from "@/controllers/API/queries/agentic";
@@ -36,6 +37,67 @@ function normalizeFlowId(flowId: string | null | undefined): string | null {
   return normalized;
 }
 
+function buildClarificationSummaryMessage(
+  flowPlan: AgenticFlowPlanResult,
+  answers: Record<string, string>,
+): string {
+  const clarificationLines = (
+    flowPlan.interactive_clarifications.length > 0
+      ? flowPlan.interactive_clarifications
+      : flowPlan.clarifying_questions.map((question, index) => ({
+          id: `clarification_${index + 1}`,
+          question,
+        }))
+  )
+    .map((clarification) => {
+      const answer = answers[clarification.id];
+      if (!answer) {
+        return null;
+      }
+      return `- ${clarification.question}: ${answer}`;
+    })
+    .filter((line): line is string => Boolean(line));
+
+  if (clarificationLines.length === 0) {
+    return "Отправляю уточнения по flow.";
+  }
+
+  return ["Уточнения по flow:", ...clarificationLines].join("\n");
+}
+
+function buildClarificationRequest(
+  flowPlan: AgenticFlowPlanResult,
+  answers: Record<string, string>,
+): string {
+  const clarificationLines = (
+    flowPlan.interactive_clarifications.length > 0
+      ? flowPlan.interactive_clarifications
+      : flowPlan.clarifying_questions.map((question, index) => ({
+          id: `clarification_${index + 1}`,
+          question,
+        }))
+  )
+    .map((clarification) => {
+      const answer = answers[clarification.id];
+      if (!answer) {
+        return null;
+      }
+      return `- ${clarification.question}\n  Ответ: ${answer}`;
+    })
+    .filter((line): line is string => Boolean(line));
+
+  return [
+    "Пересобери flow Langflow с учётом этих уточнений.",
+    "Используй только stock-компоненты Langflow, без custom component и без Python-кода.",
+    "Если после этих ответов данных всё ещё недостаточно, задай не более 3 новых уточняющих вопросов на русском языке.",
+    "",
+    `Исходный запрос пользователя: ${flowPlan.user_summary}`,
+    "",
+    "Уточнения:",
+    ...clarificationLines,
+  ].join("\n");
+}
+
 interface UseAssistantChatReturn {
   messages: AssistantMessage[];
   sessionId: string;
@@ -44,6 +106,10 @@ interface UseAssistantChatReturn {
   handleSend: (content: string, model: AssistantModel | null) => Promise<void>;
   handleApprove: (messageId: string, componentCode?: string) => Promise<void>;
   handleRetry: (messageId: string) => void;
+  handleSubmitClarifications: (
+    messageId: string,
+    answers: Record<string, string>,
+  ) => Promise<void>;
   handleStopGeneration: () => void;
   handleClearHistory: () => void;
   loadSession: (id: string, msgs: AssistantMessage[]) => void;
@@ -294,12 +360,22 @@ export function useAssistantChat(): UseAssistantChatReturn {
     ],
   );
 
-  const handleSend = useCallback(
-    async (content: string, model: AssistantModel | null) => {
-      if (isProcessing) return;
+  const sendAssistantRequest = useCallback(
+    async ({
+      displayContent,
+      requestContent,
+      model,
+    }: {
+      displayContent: string;
+      requestContent: string;
+      model: AssistantModel | null;
+    }): Promise<boolean> => {
+      if (isProcessing) {
+        return false;
+      }
 
       if (!model?.provider || !model?.name) {
-        return;
+        return false;
       }
 
       const flowId = normalizeFlowId(currentFlowId);
@@ -309,7 +385,7 @@ export function useAssistantChat(): UseAssistantChatReturn {
       const userMessage: AssistantMessage = {
         id: uid.randomUUID(10),
         role: "user",
-        content,
+        content: displayContent,
         timestamp: new Date(),
         status: "complete",
       };
@@ -334,7 +410,7 @@ export function useAssistantChat(): UseAssistantChatReturn {
               "Не удалось определить текущий flow. Откройте нужный flow и повторите запрос.",
           },
         ]);
-        return;
+        return false;
       }
 
       setMessages((prev) => [...prev, userMessage, assistantMessage]);
@@ -349,14 +425,13 @@ export function useAssistantChat(): UseAssistantChatReturn {
         await postAssistStream(
           {
             flow_id: flowId,
-            input_value: content,
-            provider: model?.provider,
-            model_name: model?.name,
+            input_value: requestContent,
+            provider: model.provider,
+            model_name: model.name,
             session_id: sessionIdRef.current,
           },
           {
             onProgress: (event) => {
-              // When transitioning to a new step, mark the previous one as completed
               if (currentStepTracked && event.step !== currentStepTracked) {
                 completedSteps.push(currentStepTracked);
               }
@@ -370,8 +445,6 @@ export function useAssistantChat(): UseAssistantChatReturn {
                   maxAttempts: event.max_attempts,
                   message: event.message,
                   error: event.error,
-                  // Preserve componentCode and className from previous
-                  // progress if the new event doesn't include them
                   className: event.class_name ?? msg.progress?.className,
                   componentCode:
                     event.component_code ?? msg.progress?.componentCode,
@@ -436,18 +509,31 @@ export function useAssistantChat(): UseAssistantChatReturn {
           },
           abortControllerRef.current.signal,
         );
+        return true;
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
           updateMessage(assistantMessageId, () => ({
             status: "error" as const,
-            error: "Failed to connect to assistant",
+            error: "Не удалось подключиться к ассистенту",
           }));
         }
         setCurrentStep(null);
         setIsProcessing(false);
+        return false;
       }
     },
     [isProcessing, currentFlowId, updateMessage, addGeneratedComponentToCanvas],
+  );
+
+  const handleSend = useCallback(
+    async (content: string, model: AssistantModel | null) => {
+      await sendAssistantRequest({
+        displayContent: content,
+        requestContent: content,
+        model,
+      });
+    },
+    [sendAssistantRequest],
   );
 
   const handleApprove = useCallback(
@@ -483,6 +569,31 @@ export function useAssistantChat(): UseAssistantChatReturn {
       handleSend(userMessage.content, lastModelRef.current);
     },
     [messages, handleSend],
+  );
+
+  const handleSubmitClarifications = useCallback(
+    async (messageId: string, answers: Record<string, string>) => {
+      const message = messages.find((item) => item.id === messageId);
+      const flowPlan = message?.result?.flowPlan;
+      const model = lastModelRef.current;
+
+      if (!flowPlan || !model) {
+        throw new Error(
+          "Не удалось подготовить уточнения для перепланирования.",
+        );
+      }
+
+      const started = await sendAssistantRequest({
+        displayContent: buildClarificationSummaryMessage(flowPlan, answers),
+        requestContent: buildClarificationRequest(flowPlan, answers),
+        model,
+      });
+
+      if (!started) {
+        throw new Error("Не удалось отправить уточнения. Попробуйте ещё раз.");
+      }
+    },
+    [messages, sendAssistantRequest],
   );
 
   const handleStopGeneration = useCallback(() => {
@@ -530,6 +641,7 @@ export function useAssistantChat(): UseAssistantChatReturn {
     handleSend,
     handleApprove,
     handleRetry,
+    handleSubmitClarifications,
     handleStopGeneration,
     handleClearHistory,
     loadSession,

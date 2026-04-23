@@ -6,9 +6,9 @@ export const ASSISTANT_SESSION_STORAGE_KEY_PREFIX =
   "langflow-assistant-session-";
 
 export const ASSISTANT_PLACEHOLDERS = [
-  "Create an agent component...",
-  "Build a RAG pipeline...",
-  "Create a web scraper component...",
+  "Создать компонент агента...",
+  "Построить пайплайн RAG...",
+  "Создать компонент для парсера веб-страниц...",
   "Build a document parser...",
   "Ask me anything about Langflow...",
 ];

@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { AssistantMessageItem } from "../assistant-message";
 import type { AssistantMessage } from "../../assistant-panel.types";
+import { AssistantMessageItem } from "../assistant-message";
 
 // --- Mocks ---
 
@@ -253,7 +253,7 @@ describe("AssistantMessageItem", () => {
   });
 
   describe("cancelled state", () => {
-    it("should show 'Cancelled' text", () => {
+    it("should show russian cancelled text", () => {
       const message = createMessage({
         role: "assistant",
         content: "",
@@ -262,7 +262,7 @@ describe("AssistantMessageItem", () => {
 
       render(<AssistantMessageItem message={message} />);
 
-      expect(screen.getByText("Cancelled")).toBeInTheDocument();
+      expect(screen.getByText("Остановлено")).toBeInTheDocument();
     });
   });
 
