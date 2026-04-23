@@ -1,5 +1,6 @@
 export type AgenticStepType =
   | "generating"
+  | "planning_flow"
   | "generating_component"
   | "generation_complete"
   | "extracting_code"
@@ -31,6 +32,7 @@ export interface AgenticCompleteData {
   component_code?: string;
   validation_attempts?: number;
   validation_error?: string;
+  flow_plan?: AgenticFlowPlanResult;
 }
 
 export interface AgenticCompleteEvent {
@@ -64,6 +66,54 @@ export interface AgenticAssistRequest {
   session_id?: string;
 }
 
+export interface AgenticFlowPlanCostEstimate {
+  tier: "low" | "medium" | "high";
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  note: string;
+}
+
+export interface AgenticFlowPlanCatalogSummary {
+  total_stock_components: number;
+  total_categories: number;
+  shortlisted_components: string[];
+}
+
+export interface AgenticFlowPlanComponent {
+  id: string;
+  component_name: string;
+  display_name?: string;
+  category?: string;
+  purpose: string;
+  field_values: Record<string, unknown>;
+  notes?: string;
+}
+
+export interface AgenticFlowPlanConnection {
+  source_id: string;
+  source_output: string;
+  target_id: string;
+  target_field: string;
+  description?: string;
+}
+
+export interface AgenticFlowPlanResult {
+  status: "approval_required" | "needs_clarification" | "unsupported";
+  title: string;
+  summary: string;
+  user_summary: string;
+  approval_message: string;
+  data_flow_steps: string[];
+  components: AgenticFlowPlanComponent[];
+  connections: AgenticFlowPlanConnection[];
+  assumptions: string[];
+  warnings: string[];
+  clarifying_questions: string[];
+  cost_estimate?: AgenticFlowPlanCostEstimate;
+  catalog_summary?: AgenticFlowPlanCatalogSummary;
+}
+
 export interface AgenticProgressState {
   step: AgenticStepType;
   attempt: number;
@@ -79,6 +129,7 @@ export interface AgenticResult {
   validated: boolean;
   className?: string;
   componentCode?: string;
+  flowPlan?: AgenticFlowPlanResult;
   validationError?: string;
   validationAttempts?: number;
   addingToCanvas?: boolean;

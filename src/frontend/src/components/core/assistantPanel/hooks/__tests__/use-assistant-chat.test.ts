@@ -23,10 +23,11 @@ jest.mock("@/hooks/use-add-component", () => ({
   useAddComponent: () => mockAddComponent,
 }));
 
+let mockCurrentFlowId = "test-flow-id";
 jest.mock("@/stores/flowsManagerStore", () => {
   const fn = (selector: (state: { currentFlowId: string }) => unknown) =>
-    selector({ currentFlowId: "test-flow-id" });
-  fn.getState = () => ({ currentFlowId: "test-flow-id" });
+    selector({ currentFlowId: mockCurrentFlowId });
+  fn.getState = () => ({ currentFlowId: mockCurrentFlowId });
   return { __esModule: true, default: fn };
 });
 
@@ -50,6 +51,7 @@ const TEST_MODEL = {
 describe("useAssistantChat", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCurrentFlowId = "test-flow-id";
     mockPostAssistStream.mockResolvedValue(undefined);
     mockValidateComponent.mockResolvedValue({
       data: { display_name: "Auto Component" },
@@ -141,6 +143,23 @@ describe("useAssistantChat", () => {
       });
       expect(request.session_id).toBeDefined();
       expect(signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it("should block sending when current flow id is nullish", async () => {
+      mockCurrentFlowId = "None";
+      const { result } = renderHook(() => useAssistantChat());
+
+      await act(async () => {
+        await result.current.handleSend("build a component", TEST_MODEL);
+      });
+
+      expect(mockPostAssistStream).not.toHaveBeenCalled();
+      expect(result.current.messages).toHaveLength(2);
+      expect(result.current.messages[0].role).toBe("user");
+      expect(result.current.messages[1].status).toBe("error");
+      expect(result.current.messages[1].error).toContain(
+        "Не удалось определить текущий flow",
+      );
     });
 
     it("should add user and assistant messages on send", async () => {

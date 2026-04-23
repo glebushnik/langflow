@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
-import type { AgenticStepType } from "@/controllers/API/queries/agentic";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import type { AgenticStepType } from "@/controllers/API/queries/agentic";
 import { cn } from "@/utils/utils";
 import { getAssistantPlaceholder } from "../assistant-panel.constants";
 import type { AssistantModel } from "../assistant-panel.types";
@@ -12,6 +12,7 @@ import { ModelSelector } from "./model-selector";
 // Steps where the "thinking" animation is showing in the message area
 const GENERATING_STEPS: AgenticStepType[] = [
   "generating",
+  "planning_flow",
   "generating_component",
 ];
 

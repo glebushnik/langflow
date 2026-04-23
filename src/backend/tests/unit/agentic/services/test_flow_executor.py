@@ -183,6 +183,35 @@ class TestRunGraphWithEvents:
         assert mock_graph.context["request_variables"]["KEY"] == "value"
 
     @pytest.mark.asyncio
+    async def test_should_ignore_nullish_flow_id_values(self):
+        """Null-like FLOW_ID values should never be assigned to the graph."""
+        mock_graph = MagicMock()
+        mock_graph.context = {}
+        mock_graph.prepare = MagicMock()
+        mock_graph.flow_id = None
+
+        async def mock_async_start(**_kwargs):
+            yield {"result": "ok"}
+
+        mock_graph.async_start = mock_async_start
+
+        event_queue: asyncio.Queue[str] = asyncio.Queue()
+        execution_result = FlowExecutionResult()
+
+        await _run_graph_with_events(
+            graph=mock_graph,
+            input_value="test",
+            global_variables={"FLOW_ID": "None"},
+            user_id=None,
+            session_id=None,
+            event_manager=MagicMock(),
+            event_queue=event_queue,
+            execution_result=execution_result,
+        )
+
+        assert mock_graph.flow_id is None
+
+    @pytest.mark.asyncio
     async def test_should_store_error_on_exception(self):
         """Should store exception in execution_result.error."""
         mock_graph = MagicMock()

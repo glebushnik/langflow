@@ -1,12 +1,16 @@
+import { useStoreApi } from "@xyflow/react";
 import { useCallback, useRef, useState } from "react";
 import ShortUniqueId from "short-unique-id";
+import { buildFlowPlanCanvasData } from "@/components/core/assistantPanel/helpers/flow-plan";
 import {
   type AgenticStepType,
   postAssistStream,
 } from "@/controllers/API/queries/agentic";
 import { usePostValidateComponentCode } from "@/controllers/API/queries/nodes/use-post-validate-component-code";
 import { useAddComponent } from "@/hooks/use-add-component";
+import useFlowStore from "@/stores/flowStore";
 import useFlowsManagerStore from "@/stores/flowsManagerStore";
+import { useTypesStore } from "@/stores/typesStore";
 import type { APIClassType } from "@/types/api";
 import type {
   AssistantMessage,
@@ -15,6 +19,22 @@ import type {
 
 const uid = new ShortUniqueId();
 const AGENTIC_SESSION_PREFIX = "agentic_";
+const NULLISH_FLOW_ID_VALUES = new Set(["", "none", "null", "undefined"]);
+const DEFAULT_CANVAS_NODE_WIDTH = 320;
+const MINIMIZED_CANVAS_NODE_WIDTH = 192;
+
+function normalizeFlowId(flowId: string | null | undefined): string | null {
+  const normalized = flowId?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (NULLISH_FLOW_ID_VALUES.has(normalized.toLowerCase())) {
+    return null;
+  }
+
+  return normalized;
+}
 
 interface UseAssistantChatReturn {
   messages: AssistantMessage[];
@@ -40,7 +60,18 @@ export function useAssistantChat(): UseAssistantChatReturn {
   );
   const [sessionId, setSessionId] = useState<string>(sessionIdRef.current);
 
+  let reactFlowStore: ReturnType<typeof useStoreApi> | null = null;
+  try {
+    reactFlowStore = useStoreApi();
+  } catch {
+    reactFlowStore = null;
+  }
   const currentFlowId = useFlowsManagerStore((state) => state.currentFlowId);
+  const canvasNodes = useFlowStore((state) => state.nodes);
+  const setNodes = useFlowStore((state) => state.setNodes);
+  const setEdges = useFlowStore((state) => state.setEdges);
+  const currentFlowLocked = useFlowStore((state) => state.currentFlow?.locked);
+  const templates = useTypesStore((state) => state.templates);
   const addComponent = useAddComponent();
   const { mutateAsync: validateComponent } = usePostValidateComponentCode();
 
@@ -66,6 +97,7 @@ export function useAssistantChat(): UseAssistantChatReturn {
           validated: msg.result?.validated ?? true,
           className: msg.result?.className,
           componentCode: code,
+          flowPlan: msg.result?.flowPlan,
           validationAttempts: msg.result?.validationAttempts,
           validationError: msg.result?.validationError,
           addingToCanvas: true,
@@ -93,6 +125,7 @@ export function useAssistantChat(): UseAssistantChatReturn {
             validated: msg.result?.validated ?? true,
             className: msg.result?.className,
             componentCode: code,
+            flowPlan: msg.result?.flowPlan,
             validationAttempts: msg.result?.validationAttempts,
             validationError: msg.result?.validationError,
             addingToCanvas: false,
@@ -111,6 +144,7 @@ export function useAssistantChat(): UseAssistantChatReturn {
             validated: msg.result?.validated ?? true,
             className: msg.result?.className,
             componentCode: code,
+            flowPlan: msg.result?.flowPlan,
             validationAttempts: msg.result?.validationAttempts,
             validationError: msg.result?.validationError,
             addingToCanvas: false,
@@ -123,6 +157,143 @@ export function useAssistantChat(): UseAssistantChatReturn {
     [validateComponent, addComponent, updateMessage],
   );
 
+  const addPlannedFlowToCanvas = useCallback(
+    async (messageId: string) => {
+      const message = messages.find((msg) => msg.id === messageId);
+      const flowPlan = message?.result?.flowPlan;
+      if (!flowPlan) {
+        return;
+      }
+
+      updateMessage(messageId, (msg) => ({
+        result: {
+          content: msg.result?.content ?? msg.content,
+          validated: false,
+          flowPlan,
+          addingToCanvas: true,
+          addedToCanvas: false,
+          addToCanvasError: undefined,
+        },
+      }));
+
+      try {
+        if (currentFlowLocked) {
+          throw new Error("This flow is locked and cannot be edited.");
+        }
+
+        if (flowPlan.status !== "approval_required") {
+          throw new Error(
+            "This plan is not ready for implementation. Resolve the open questions first.",
+          );
+        }
+
+        if (!Object.keys(templates).length) {
+          throw new Error("Component templates are not loaded yet.");
+        }
+
+        const reactFlowState = reactFlowStore?.getState();
+        const getCanvasNodeWidth = (node: (typeof canvasNodes)[number]) =>
+          node.measured?.width ??
+          node.width ??
+          (node.data.showNode === false
+            ? MINIMIZED_CANVAS_NODE_WIDTH
+            : DEFAULT_CANVAS_NODE_WIDTH);
+        const zoomLevel = reactFlowState?.transform?.[2] ?? 1;
+        const zoomMultiplier = 1 / zoomLevel;
+        const viewportWidth = reactFlowState?.width ?? 1440;
+        const viewportHeight = reactFlowState?.height ?? 900;
+        const centerX = reactFlowState
+          ? -reactFlowState.transform[0] * zoomMultiplier +
+            (viewportWidth * zoomMultiplier) / 2
+          : 0;
+        const centerY = reactFlowState
+          ? -reactFlowState.transform[1] * zoomMultiplier +
+            (viewportHeight * zoomMultiplier) / 2
+          : 0;
+        const maxExistingRight =
+          canvasNodes.length > 0
+            ? Math.max(
+                ...canvasNodes.map(
+                  (node) => node.position.x + getCanvasNodeWidth(node),
+                ),
+              )
+            : centerX;
+        const anchorX =
+          canvasNodes.length > 0
+            ? maxExistingRight + 104 * zoomMultiplier
+            : centerX - viewportWidth * zoomMultiplier * 0.22;
+
+        const { nodes, edges } = buildFlowPlanCanvasData({
+          plan: flowPlan,
+          templates,
+          existingNodes: canvasNodes,
+          anchor: {
+            x: anchorX,
+            y: centerY,
+          },
+          viewport: {
+            width: viewportWidth * zoomMultiplier,
+            height: viewportHeight * zoomMultiplier,
+            centerX,
+            centerY,
+          },
+          preferCentered: canvasNodes.length === 0,
+        });
+
+        if (nodes.length === 0 && edges.length === 0) {
+          throw new Error(
+            "The approved plan did not contain any canvas changes.",
+          );
+        }
+
+        setNodes((oldNodes) => [
+          ...oldNodes.map((node) => ({ ...node, selected: false })),
+          ...nodes,
+        ]);
+        setEdges((oldEdges) => [
+          ...oldEdges.map((edge) => ({ ...edge, selected: false })),
+          ...edges,
+        ]);
+
+        updateMessage(messageId, (msg) => ({
+          result: {
+            content: msg.result?.content ?? msg.content,
+            validated: false,
+            flowPlan,
+            addingToCanvas: false,
+            addedToCanvas: true,
+            addToCanvasError: undefined,
+          },
+        }));
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error("Failed to add planned flow to canvas:", error);
+
+        updateMessage(messageId, (msg) => ({
+          result: {
+            content: msg.result?.content ?? msg.content,
+            validated: false,
+            flowPlan,
+            addingToCanvas: false,
+            addedToCanvas: false,
+            addToCanvasError: `Failed to add flow: ${errorMessage}`,
+          },
+        }));
+      }
+    },
+    [
+      messages,
+      canvasNodes,
+      currentFlowLocked,
+      reactFlowStore,
+      setEdges,
+      setNodes,
+      templates,
+      updateMessage,
+    ],
+  );
+
   const handleSend = useCallback(
     async (content: string, model: AssistantModel | null) => {
       if (isProcessing) return;
@@ -130,6 +301,8 @@ export function useAssistantChat(): UseAssistantChatReturn {
       if (!model?.provider || !model?.name) {
         return;
       }
+
+      const flowId = normalizeFlowId(currentFlowId);
 
       lastModelRef.current = model;
 
@@ -150,6 +323,20 @@ export function useAssistantChat(): UseAssistantChatReturn {
         status: "streaming",
       };
 
+      if (!flowId) {
+        setMessages((prev) => [
+          ...prev,
+          userMessage,
+          {
+            ...assistantMessage,
+            status: "error",
+            error:
+              "Не удалось определить текущий flow. Откройте нужный flow и повторите запрос.",
+          },
+        ]);
+        return;
+      }
+
       setMessages((prev) => [...prev, userMessage, assistantMessage]);
       setIsProcessing(true);
 
@@ -161,7 +348,7 @@ export function useAssistantChat(): UseAssistantChatReturn {
       try {
         await postAssistStream(
           {
-            flow_id: currentFlowId || "",
+            flow_id: flowId,
             input_value: content,
             provider: model?.provider,
             model_name: model?.name,
@@ -201,15 +388,18 @@ export function useAssistantChat(): UseAssistantChatReturn {
               const shouldAutoAdd = Boolean(
                 event.data.validated && event.data.component_code,
               );
+              const isFlowPlan = Boolean(event.data.flow_plan);
 
               updateMessage(assistantMessageId, () => ({
                 status: "complete" as const,
                 content: event.data.result || "",
+                ...(isFlowPlan && { progress: undefined }),
                 result: {
                   content: event.data.result || "",
                   validated: event.data.validated,
                   className: event.data.class_name,
                   componentCode: event.data.component_code,
+                  flowPlan: event.data.flow_plan,
                   validationAttempts: event.data.validation_attempts,
                   validationError: event.data.validation_error,
                   addingToCanvas: shouldAutoAdd,
@@ -263,12 +453,17 @@ export function useAssistantChat(): UseAssistantChatReturn {
   const handleApprove = useCallback(
     async (messageId: string, componentCode?: string) => {
       const message = messages.find((m) => m.id === messageId);
+      if (message?.result?.flowPlan) {
+        await addPlannedFlowToCanvas(messageId);
+        return;
+      }
+
       const code = componentCode || message?.result?.componentCode;
       if (!code) return;
 
       await addGeneratedComponentToCanvas(messageId, code);
     },
-    [messages, addGeneratedComponentToCanvas],
+    [messages, addGeneratedComponentToCanvas, addPlannedFlowToCanvas],
   );
 
   const handleRetry = useCallback(

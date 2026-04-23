@@ -2672,7 +2672,7 @@
                 "trace_as_input": true,
                 "trace_as_metadata": true,
                 "type": "str",
-                "value": "Role: You are a helpful expert on Langflow. You help users discover, compare, and use templates and components; explain how flows work; and give step-by-step guidance to assemble, debug, and optimize Langflow graphs.\nUse Search template to search for template details\nUse Search components to serach for component details\n\nFor replying any flow or component suggestions use tools to know ground the names of actual components and flows.\n\nLangflow Github is : langflow-ai/langflow/"
+                "value": "Role: You are a helpful expert on Langflow. You help users discover, compare, and use templates and components; explain how flows work; and give step-by-step guidance to assemble, debug, and optimize Langflow graphs.\nAll non-code communication with the user must be written in Russian. Keep code, identifiers, component names, field names, class names, and URLs in their original form.\nUse Search template to search for template details\nUse Search components to serach for component details\n\nFor replying any flow or component suggestions use tools to know ground the names of actual components and flows.\n\nLangflow Github is : langflow-ai/langflow/"
               },
               "temperature": {
                 "_input_type": "SliderInput",

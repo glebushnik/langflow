@@ -16,6 +16,7 @@ from lfx.log.logger import logger
 from lfx.schema.schema import InputValueRequest
 from lfx.utils.flow_validation import CustomComponentValidationError
 
+from langflow.agentic.helpers.flow_id import normalize_flow_id
 from langflow.agentic.services.flow_types import (
     STREAMING_QUEUE_MAX_SIZE,
     FlowExecutionError,
@@ -50,7 +51,7 @@ async def _run_graph_with_events(
                 graph.context["request_variables"] = {}
             graph.context["request_variables"].update(global_variables)
 
-        flow_id = (global_variables or {}).get("FLOW_ID")
+        flow_id = normalize_flow_id((global_variables or {}).get("FLOW_ID"))
         if flow_id:
             graph.flow_id = flow_id
         graph.flow_name = graph.flow_name or "Assistant Flow"
@@ -122,7 +123,7 @@ async def execute_flow_file(
                 graph.context["request_variables"] = {}
             graph.context["request_variables"].update(global_variables)
 
-        flow_id = (global_variables or {}).get("FLOW_ID")
+        flow_id = normalize_flow_id((global_variables or {}).get("FLOW_ID"))
         if flow_id:
             graph.flow_id = flow_id
         graph.flow_name = graph.flow_name or flow_filename

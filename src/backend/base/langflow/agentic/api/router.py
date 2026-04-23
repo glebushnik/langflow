@@ -20,6 +20,7 @@ from lfx.log.logger import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from langflow.agentic.api.schemas import AssistantRequest
+from langflow.agentic.helpers.flow_id import normalize_flow_id
 from langflow.agentic.services.assistant_service import (
     execute_flow_with_validation,
     execute_flow_with_validation_streaming,
@@ -107,9 +108,13 @@ async def _resolve_assistant_context(
             ),
         )
 
+    flow_id = normalize_flow_id(request.flow_id)
+    if flow_id is None:
+        raise HTTPException(status_code=400, detail="A valid flow_id is required for assistant requests.")
+
     global_vars: dict[str, str] = {
         "USER_ID": str(user_id),
-        "FLOW_ID": request.flow_id,
+        "FLOW_ID": flow_id,
         "MODEL_NAME": model_name,
         "PROVIDER": provider,
     }
@@ -134,10 +139,13 @@ async def _resolve_assistant_context(
 async def execute_named_flow(flow_name: str, request: AssistantRequest, current_user: CurrentActiveUser) -> dict:
     """Execute a named flow from the flows directory."""
     user_id = current_user.id
+    flow_id = normalize_flow_id(request.flow_id)
+    if flow_id is None:
+        raise HTTPException(status_code=400, detail="A valid flow_id is required for assistant requests.")
 
     global_vars = {
         "USER_ID": str(user_id),
-        "FLOW_ID": request.flow_id,
+        "FLOW_ID": flow_id,
     }
 
     if request.component_id:

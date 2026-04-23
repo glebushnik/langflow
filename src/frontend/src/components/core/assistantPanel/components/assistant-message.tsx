@@ -9,6 +9,7 @@ import { cn } from "@/utils/utils";
 import type { AssistantMessage } from "../assistant-panel.types";
 import { getRandomThinkingMessage } from "../helpers/messages";
 import { AssistantComponentResult } from "./assistant-component-result";
+import { AssistantFlowPlanResult } from "./assistant-flow-plan-result";
 import { AssistantLoadingState } from "./assistant-loading-state";
 import { AssistantValidationFailed } from "./assistant-validation-failed";
 
@@ -48,6 +49,7 @@ export function AssistantMessageItem({
     message.result?.validated && message.result?.componentCode;
   const hasValidationError =
     message.result?.validated === false && message.result?.validationError;
+  const hasFlowPlan = Boolean(message.result?.flowPlan);
   // Skip animation if the message is already complete on mount (e.g. panel was closed and reopened)
   const [validationAnimationComplete, setValidationAnimationComplete] =
     useState(message.status === "complete");
@@ -57,7 +59,7 @@ export function AssistantMessageItem({
   useEffect(() => {
     if (
       message.status === "complete" &&
-      (hasValidatedResult || hasValidationError) &&
+      (hasValidatedResult || hasValidationError || hasFlowPlan) &&
       !validationAnimationComplete
     ) {
       const timer = setTimeout(() => {
@@ -69,6 +71,7 @@ export function AssistantMessageItem({
     message.status,
     hasValidatedResult,
     hasValidationError,
+    hasFlowPlan,
     validationAnimationComplete,
   ]);
 
@@ -138,6 +141,15 @@ export function AssistantMessageItem({
 
     // Show validation failure after all retries (only after animation completes)
     const canShowResult = validationAnimationComplete || !message.progress;
+    if (hasFlowPlan && message.result && canShowResult) {
+      return (
+        <AssistantFlowPlanResult
+          result={message.result}
+          onApprove={() => onApprove?.(message.id)}
+        />
+      );
+    }
+
     if (hasValidationError && message.result && canShowResult) {
       return (
         <AssistantValidationFailed

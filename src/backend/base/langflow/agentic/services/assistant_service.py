@@ -27,6 +27,7 @@ from langflow.agentic.services.flow_executor import (
     execute_flow_file_streaming,
     extract_response_text,
 )
+from langflow.agentic.services.flow_planner import plan_stock_flow
 from langflow.agentic.services.flow_types import (
     EXECUTION_RETRY_TEMPLATE,
     MAX_VALIDATION_RETRIES,
@@ -68,6 +69,50 @@ async def execute_flow_with_validation(
         return {"result": REFUSAL_MESSAGE}
 
     current_input = sanitization.sanitized_input
+
+    intent_result = await classify_intent(
+        text=current_input,
+        global_variables=global_variables,
+        user_id=user_id,
+        provider=provider,
+        model_name=model_name,
+        api_key_var=api_key_var,
+    )
+
+    if intent_result.intent == "off_topic":
+        logger.info("Off-topic request detected, returning refusal")
+        return {"result": OFF_TOPIC_REFUSAL_MESSAGE, "validated": False}
+
+    if intent_result.intent == "build_flow":
+        logger.info("Build-flow request detected, returning approval plan")
+        flow_plan = await plan_stock_flow(
+            original_request=current_input,
+            translated_request=intent_result.translation,
+            global_variables=global_variables,
+            user_id=user_id,
+            provider=provider,
+            model_name=model_name,
+            api_key_var=api_key_var,
+        )
+        return {
+            "result": flow_plan.approval_message,
+            "validated": False,
+            "flow_plan": flow_plan.model_dump(mode="json"),
+        }
+
+    if intent_result.intent != "generate_component":
+        return await execute_flow_file(
+            flow_filename=flow_filename,
+            input_value=current_input,
+            global_variables=global_variables,
+            verbose=True,
+            user_id=user_id,
+            session_id=session_id,
+            provider=provider,
+            model_name=model_name,
+            api_key_var=api_key_var,
+        )
+
     attempt = 0
 
     while attempt <= max_retries:
@@ -202,9 +247,12 @@ async def execute_flow_with_validation_streaming(
         yield format_complete_event({"result": OFF_TOPIC_REFUSAL_MESSAGE})
         return
 
-    # Check if this is a component generation request based on LLM classification
     is_component_request = intent_result.intent == "generate_component"
-    logger.info(f"Intent classification: {intent_result.intent} (is_component_request={is_component_request})")
+    is_build_flow_request = intent_result.intent == "build_flow"
+    logger.info(
+        f"Intent classification: {intent_result.intent} "
+        f"(is_component_request={is_component_request}, is_build_flow_request={is_build_flow_request})"
+    )
 
     # Create cancel event for propagating cancellation to flow executor
     cancel_event = asyncio.Event()
@@ -218,6 +266,43 @@ async def execute_flow_with_validation_streaming(
         return False
 
     try:
+        if is_build_flow_request:
+            if await check_cancelled():
+                logger.info("Client disconnected before flow planning started")
+                yield format_cancelled_event()
+                return
+
+            yield format_progress_event(
+                "planning_flow",
+                1,
+                1,
+                message="Planning a stock-component flow...",
+            )
+
+            flow_plan = await plan_stock_flow(
+                original_request=current_input,
+                translated_request=intent_result.translation,
+                global_variables=global_variables,
+                user_id=user_id,
+                provider=provider,
+                model_name=model_name,
+                api_key_var=api_key_var,
+            )
+
+            if await check_cancelled():
+                logger.info("Client disconnected during flow planning")
+                yield format_cancelled_event()
+                return
+
+            yield format_complete_event(
+                {
+                    "result": flow_plan.approval_message,
+                    "validated": False,
+                    "flow_plan": flow_plan.model_dump(mode="json"),
+                }
+            )
+            return
+
         # max_retries=0 means 1 attempt (no retries), matching non-streaming semantics
         total_attempts = max_retries + 1
 
